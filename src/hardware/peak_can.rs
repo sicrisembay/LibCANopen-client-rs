@@ -150,11 +150,11 @@ impl PeakCanAdapter {
                     )
                 };
 
-                if result == PCAN_ERROR_OK {
+                if result == PCAN_ERROR_OK as _ {
                     // Successfully read a message, convert and broadcast it
                     match Self::pcan_to_can_message(&pcan_msg) {
                         Ok(can_message) => {
-                            if let Err(_) = task_tx.send(can_message.clone()) {
+                            if task_tx.send(can_message.clone()).is_err() {
                                 log::warn!(
                                     "Failed to broadcast received CAN message - no receivers"
                                 );
@@ -170,7 +170,7 @@ impl PeakCanAdapter {
                             log::error!("Failed to convert received PCAN message: {}", e);
                         }
                     }
-                } else if result == PCAN_ERROR_QRCVEMPTY {
+                } else if result == PCAN_ERROR_QRCVEMPTY as _ {
                     // No message available, wait a bit before trying again
                     tokio::time::sleep(Duration::from_millis(1)).await;
                 } else {
@@ -219,7 +219,7 @@ impl CanHardware for PeakCanAdapter {
         // Initialize PEAK CAN hardware
         let result = unsafe { CAN_Initialize(handle as u16, pcan_baud, 0, 0, 0) };
 
-        if result != PCAN_ERROR_OK {
+        if result != PCAN_ERROR_OK as _ {
             return Err(CANopenError::PeakCan(format!(
                 "Failed to initialize PCAN on handle {:?}: status {:#X}",
                 handle, result
@@ -250,7 +250,7 @@ impl CanHardware for PeakCanAdapter {
         let handle = self.handle;
         let result = unsafe { CAN_Uninitialize(handle as u16) };
 
-        if result != PCAN_ERROR_OK {
+        if result != PCAN_ERROR_OK as _ {
             log::warn!(
                 "Failed to properly uninitialize PCAN handle {:?}: status {:#X}",
                 handle,
@@ -291,7 +291,7 @@ impl CanHardware for PeakCanAdapter {
             )
         };
 
-        if result != PCAN_ERROR_OK {
+        if result != PCAN_ERROR_OK as _ {
             return Err(CANopenError::PeakCan(format!(
                 "Failed to send CAN message ID=0x{:03X}: status {:#X}",
                 message.id.raw(),

@@ -142,7 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Register handlers for all discovered nodes
     println!("Registering handlers for multiple nodes:");
 
-    let nodes_to_monitor = vec![1, 2, 3, 9];
+    let nodes_to_monitor = [1, 2, 3, 9];
     let counters: Vec<Arc<AtomicU32>> = (0..nodes_to_monitor.len())
         .map(|_| Arc::new(AtomicU32::new(0)))
         .collect();
@@ -152,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let counter = Arc::clone(&counters[idx]);
 
         canopen
-            .register_pdo_handler(cob_id, move |data| {
+            .register_pdo_handler(cob_id, move |_data| {
                 counter.fetch_add(1, Ordering::Relaxed);
             })
             .await;

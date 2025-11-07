@@ -148,7 +148,7 @@ impl NmtManager {
         // Heartbeat messages are at COB-ID 0x700 + node_id
         let cob_id = message.id.raw();
 
-        if cob_id < 0x700 || cob_id > 0x77F {
+        if !(0x700..=0x77F).contains(&cob_id) {
             return Ok(false); // Not a heartbeat message
         }
 

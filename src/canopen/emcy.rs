@@ -15,6 +15,9 @@ use std::sync::RwLock;
 /// Emergency COB-ID base (0x80)
 pub const EMCY_COB_ID_BASE: u16 = 0x80;
 
+/// Type alias for emergency handler callback
+pub type EmcyHandlerCallback = Arc<dyn Fn(&EmergencyMessage) + Send + Sync>;
+
 /// Emergency message structure
 #[derive(Debug, Clone, PartialEq)]
 pub struct EmergencyMessage {
@@ -43,7 +46,7 @@ impl EmergencyMessage {
     /// * `None` if invalid format
     pub fn from_can_data(cob_id: u16, data: &[u8]) -> Option<Self> {
         // EMCY COB-ID must be in range 0x81-0xFF (node 1-127)
-        if cob_id < 0x81 || cob_id > 0xFF {
+        if !(0x81..=0xFF).contains(&cob_id) {
             return None;
         }
 
@@ -126,10 +129,16 @@ impl EmergencyMessage {
 /// Emergency message manager
 pub struct EmcyManager {
     /// Registered emergency handlers (key = node_id)
-    emcy_handlers: Arc<RwLock<HashMap<u8, Arc<dyn Fn(&EmergencyMessage) + Send + Sync>>>>,
+    emcy_handlers: Arc<RwLock<HashMap<u8, EmcyHandlerCallback>>>,
 
     /// Recent emergency messages (key = node_id)
     recent_emcy: Arc<RwLock<HashMap<u8, EmergencyMessage>>>,
+}
+
+impl Default for EmcyManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EmcyManager {
@@ -148,7 +157,9 @@ impl EmcyManager {
     /// * `handler` - Callback function invoked when emergency is received
     ///
     /// # Example
-    /// ```no_run
+    /// ```
+    /// # use libcanopen_client::EmcyManager;
+    /// let emcy_manager = EmcyManager::new();
     /// emcy_manager.register_emcy_handler(5, |emcy| {
     ///     println!("Emergency from node {}: Error 0x{:04X}",
     ///         emcy.node_id, emcy.error_code);
@@ -214,7 +225,7 @@ impl EmcyManager {
 
     /// Check if COB-ID is an emergency message (0x81-0xFF)
     pub fn is_emcy_message(cob_id: u16) -> bool {
-        cob_id >= 0x81 && cob_id <= 0xFF
+        (0x81..=0xFF).contains(&cob_id)
     }
 }
 

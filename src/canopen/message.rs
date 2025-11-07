@@ -86,10 +86,10 @@ impl CanId {
     /// Get the PDO number (1-4) if this is a PDO COB-ID
     pub fn pdo_number(&self) -> Option<u8> {
         match self.0 {
-            0x180..=0x1FF | 0x200..=0x27F => Some(1), // PDO1
-            0x280..=0x2FF | 0x300..=0x37F => Some(2), // PDO2
-            0x380..=0x3FF | 0x400..=0x47F => Some(3), // PDO3
-            0x480..=0x4FF | 0x500..=0x57F => Some(4), // PDO4
+            0x180..=0x27F => Some(1), // PDO1
+            0x280..=0x37F => Some(2), // PDO2
+            0x380..=0x47F => Some(3), // PDO3
+            0x480..=0x57F => Some(4), // PDO4
             _ => None,
         }
     }
@@ -397,6 +397,7 @@ pub enum SdoClientCommand {
 
 /// SDO server command specifiers
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub enum SdoServerCommand {
     UploadSegmentResponse = 0x00,
     DownloadSegmentResponse = 0x20,

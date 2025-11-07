@@ -290,7 +290,7 @@ impl DataTypeConverter {
             DataType::VisibleString => {
                 // Validate that all bytes are printable ASCII
                 for &byte in data {
-                    if byte < 0x20 || byte > 0x7E {
+                    if !(0x20..=0x7E).contains(&byte) {
                         return Err(CANopenError::InvalidData(
                             "VisibleString contains non-printable characters".to_string(),
                         ));
@@ -339,7 +339,7 @@ impl DataTypeConverter {
                             break;
                         }
                     }
-                    size.min(4).max(1)
+                    size.clamp(1, 4)
                 } else {
                     data.len()
                 }
@@ -484,15 +484,15 @@ mod tests {
     fn test_bool_edge_cases() {
         // Test true value
         assert_eq!(true.to_canopen_bytes(), vec![1]);
-        assert_eq!(bool::from_canopen_bytes(&[1]).unwrap(), true);
+        assert!(bool::from_canopen_bytes(&[1]).unwrap());
 
         // Test false value
         assert_eq!(false.to_canopen_bytes(), vec![0]);
-        assert_eq!(bool::from_canopen_bytes(&[0]).unwrap(), false);
+        assert!(!bool::from_canopen_bytes(&[0]).unwrap());
 
         // Test non-zero as true
-        assert_eq!(bool::from_canopen_bytes(&[255]).unwrap(), true);
-        assert_eq!(bool::from_canopen_bytes(&[42]).unwrap(), true);
+        assert!(bool::from_canopen_bytes(&[255]).unwrap());
+        assert!(bool::from_canopen_bytes(&[42]).unwrap());
 
         // Test empty data error
         assert!(bool::from_canopen_bytes(&[]).is_err());

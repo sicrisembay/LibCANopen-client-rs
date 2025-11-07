@@ -30,19 +30,25 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     // Create and connect
-//!     let mut canopen = CANopenSimple::new();
+//!     // Create PEAK CAN adapter
+//!     let hardware = Box::new(PeakCanAdapter::new(
+//!         PcanHandle::PcanUsbbus1,
+//!         BusSpeed::Baud1M
+//!     ));
+//!     
+//!     // Create CANopen instance
+//!     let mut canopen = CANopenSimple::new(hardware);
 //!     canopen.connect(BusSpeed::Baud1M).await?;
 //!
-//!     // Read device type from node 5
-//!     let device_type = canopen.sdo_read_u32(5, 0x1000, 0).await?;
+//!     // Read device type from node 5 (timeout: 1000ms)
+//!     let device_type = canopen.sdo_read_u32(5, 0x1000, 0, 1000).await?;
 //!     println!("Device type: 0x{:08X}", device_type);
 //!
 //!     // Start node in operational mode
 //!     canopen.nmt_start(5).await?;
 //!
-//!     // Register PDO callback
-//!     canopen.register_pdo_callback(0x185, |data| {
+//!     // Register PDO handler
+//!     canopen.register_pdo_handler(0x185, |data| {
 //!         println!("PDO received: {:02X?}", data);
 //!     }).await;
 //!
@@ -60,16 +66,16 @@
 //! ```no_run
 //! # use libcanopen_client::*;
 //! # async fn example(canopen: &CANopenSimple) -> Result<()> {
-//! // Read device information
-//! let vendor_id = canopen.sdo_read_u32(5, 0x1018, 1).await?;
-//! let product_code = canopen.sdo_read_u32(5, 0x1018, 2).await?;
+//! // Read device information (timeout: 1000ms)
+//! let vendor_id = canopen.sdo_read_u32(5, 0x1018, 1, 1000).await?;
+//! let product_code = canopen.sdo_read_u32(5, 0x1018, 2, 1000).await?;
 //!
 //! // Configure heartbeat (1000ms)
-//! canopen.sdo_write_u16(5, 0x1017, 0, 1000).await?;
+//! canopen.sdo_write_u16(5, 0x1017, 0, 1000, 1000).await?;
 //!
 //! // Segmented transfers (>4 bytes) handled automatically
 //! let large_data = vec![0u8; 100];
-//! canopen.sdo_write(5, 0x1008, 0, large_data).await?;
+//! canopen.sdo_write_data(5, 0x1008, 0, large_data, 1000).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -84,10 +90,10 @@
 //! canopen.nmt_stop(5).await?;               // Stopped
 //! canopen.nmt_enter_pre_operational(5).await?;
 //!
-//! // Monitor heartbeats
-//! canopen.register_heartbeat_callback(5, |node_id, state| {
-//!     println!("Node {} changed to {:?}", node_id, state);
-//! }).await;
+//! // Check node state
+//! if let Some(state) = canopen.nmt_get_node_state(5).await {
+//!     println!("Node 5 is in state: {:?}", state);
+//! }
 //! # Ok(())
 //! # }
 //! ```
@@ -98,10 +104,11 @@
 //! # use libcanopen_client::*;
 //! # async fn example(canopen: &CANopenSimple) -> Result<()> {
 //! // Send PDO
-//! canopen.send_pdo(0x185, vec![0x01, 0x02, 0x03, 0x04]).await?;
+//! let message = CanMessage::new(0x185, vec![0x01, 0x02, 0x03, 0x04])?;
+//! canopen.send_message(message).await?;
 //!
-//! // Receive PDO with callback
-//! canopen.register_pdo_callback(0x285, |data| {
+//! // Receive PDO with handler
+//! canopen.register_pdo_handler(0x285, |data| {
 //!     // Process real-time data
 //!     let value = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
 //!     println!("Sensor value: {}", value);
@@ -153,7 +160,7 @@
 //! canopen.lss_switch_state_global(LssMode::Configuration).await?;
 //!
 //! // Read LSS address
-//! let address = canopen.lss_inquire_lss_address(1000).await?;
+//! let address = canopen.lss_inquire_address(1000).await?;
 //!
 //! // Configure node-ID (if needed)
 //! match canopen.lss_configure_node_id(10, 1000).await? {
@@ -182,7 +189,7 @@
 //! ```no_run
 //! # use libcanopen_client::*;
 //! # async fn example(canopen: &CANopenSimple) {
-//! match canopen.sdo_read_u32(5, 0x1000, 0).await {
+//! match canopen.sdo_read_u32(5, 0x1000, 0, 1000).await {
 //!     Ok(device_type) => println!("Device: 0x{:08X}", device_type),
 //!     Err(CANopenError::Timeout) => println!("Node not responding"),
 //!     Err(CANopenError::Sdo { code }) => println!("SDO error: 0x{:08X}", code),
@@ -394,7 +401,7 @@ impl CANopenSimple {
                             }
                         }
                         // Process Emergency messages (COB-ID 0x81-0xFF)
-                        else if cob_id >= 0x81 && cob_id <= 0xFF {
+                        else if (0x81..=0xFF).contains(&cob_id) {
                             emcy_manager
                                 .write()
                                 .await
@@ -409,7 +416,7 @@ impl CANopenSimple {
                             }
                         }
                         // Process PDO messages (0x180-0x57F)
-                        else if cob_id >= 0x180 && cob_id <= 0x57F {
+                        else if (0x180..=0x57F).contains(&cob_id) {
                             if let Err(e) = pdo_manager.write().await.process_pdo(&can_msg) {
                                 log::warn!("Failed to process PDO: {:?}", e);
                             }

@@ -129,13 +129,13 @@ fn test_data_endianness() {
 /// Test message priorities (lower COB-ID = higher priority)
 #[test]
 fn test_message_priorities() {
-    let priorities = vec![
+    let priorities = [
         0x000, // NMT - highest priority
         0x080, // SYNC - high priority
         0x081, // EMCY - high priority
         0x181, // PDO - medium priority
         0x605, // SDO - lower priority
-        0x705, // Heartbeat - lower priority
+        0x705,
     ];
 
     // Verify priorities are in ascending order
@@ -150,7 +150,7 @@ fn test_concurrent_messages() {
     let node_id = 10;
 
     // Create multiple protocol messages
-    let messages = vec![
+    let messages = [
         CanMessage::new(0x000, vec![0x01, node_id]).unwrap(), // NMT
         CanMessage::new(
             0x600 + node_id as u16,
@@ -158,7 +158,7 @@ fn test_concurrent_messages() {
         )
         .unwrap(), // SDO
         CanMessage::new(0x080, vec![1]).unwrap(),             // SYNC
-        CanMessage::new(0x180 + node_id as u16, vec![0x11, 0x22, 0x33, 0x44]).unwrap(), // PDO
+        CanMessage::new(0x180 + node_id as u16, vec![0x11, 0x22, 0x33, 0x44]).unwrap(),
     ];
 
     // Verify each message type
@@ -209,22 +209,22 @@ fn test_cob_id_calculation() {
     for node_id in 1..=127 {
         // SDO TX (master to slave)
         let sdo_tx_cob_id = 0x600 + node_id;
-        assert!(sdo_tx_cob_id >= 0x601 && sdo_tx_cob_id <= 0x67F);
+        assert!((0x601..=0x67F).contains(&sdo_tx_cob_id));
 
         // SDO RX (slave to master)
         let sdo_rx_cob_id = 0x580 + node_id;
-        assert!(sdo_rx_cob_id >= 0x581 && sdo_rx_cob_id <= 0x5FF);
+        assert!((0x581..=0x5FF).contains(&sdo_rx_cob_id));
 
         // TPDO1
         let tpdo1_cob_id = 0x180 + node_id;
-        assert!(tpdo1_cob_id >= 0x181 && tpdo1_cob_id <= 0x1FF);
+        assert!((0x181..=0x1FF).contains(&tpdo1_cob_id));
 
         // Node Guarding/Heartbeat
         let ng_cob_id = 0x700 + node_id;
-        assert!(ng_cob_id >= 0x701 && ng_cob_id <= 0x77F);
+        assert!((0x701..=0x77F).contains(&ng_cob_id));
 
         // Emergency
         let emcy_cob_id = 0x080 + node_id;
-        assert!(emcy_cob_id >= 0x081 && emcy_cob_id <= 0x0FF);
+        assert!((0x081..=0x0FF).contains(&emcy_cob_id));
     }
 }

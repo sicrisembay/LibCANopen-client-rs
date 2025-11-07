@@ -15,16 +15,25 @@ use std::sync::RwLock;
 /// SYNC COB-ID (fixed at 0x80)
 pub const SYNC_COB_ID: u16 = 0x80;
 
+/// Type alias for SYNC callback
+pub type SyncCallback = Arc<dyn Fn(u8) + Send + Sync>;
+
 /// SYNC message manager
 pub struct SyncManager {
     /// Current SYNC counter value (0-240, or 0 if counter not used)
     counter: Arc<RwLock<u8>>,
 
     /// Optional callback for SYNC reception
-    sync_callback: Arc<RwLock<Option<Arc<dyn Fn(u8) + Send + Sync>>>>,
+    sync_callback: Arc<RwLock<Option<SyncCallback>>>,
 
     /// Whether to use SYNC counter (standard allows 0-240)
     use_counter: Arc<RwLock<bool>>,
+}
+
+impl Default for SyncManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SyncManager {
@@ -118,7 +127,9 @@ impl SyncManager {
     /// The callback receives the SYNC counter value (0 if no counter present)
     ///
     /// # Example
-    /// ```no_run
+    /// ```
+    /// # use libcanopen_client::SyncManager;
+    /// let sync_manager = SyncManager::new();
     /// sync_manager.register_sync_callback(|counter| {
     ///     println!("SYNC received: counter={}", counter);
     /// });

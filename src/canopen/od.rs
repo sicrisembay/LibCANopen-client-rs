@@ -179,8 +179,6 @@ pub mod device_profile {
     pub const DEVICE_PROFILE_END: ObjectIndex = 0x9FFF;
 }
 
-/// Emergency error codes (from message.rs but also used in OD)
-
 /// Access types for Object Dictionary entries
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccessType {

@@ -196,7 +196,7 @@ async fn main() -> Result<()> {
     println!("Verifying storage is cleared...");
     let mut any_found = false;
     for node_id in [1u8, 2, 9] {
-        if let Some(_) = canopen.get_recent_emcy(node_id).await {
+        if canopen.get_recent_emcy(node_id).await.is_some() {
             any_found = true;
             println!("  ⚠ Node {} still has stored emergency", node_id);
         }

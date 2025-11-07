@@ -697,7 +697,7 @@ mod tests {
     #[test]
     fn test_all_lss_commands_have_unique_values() {
         // Ensure no command value conflicts
-        let commands = vec![
+        let commands = [
             LssCommand::SwitchStateGlobal as u8,
             LssCommand::SwitchStateSelective as u8,
             LssCommand::ConfigureNodeId as u8,
@@ -776,7 +776,7 @@ mod tests {
             serial_number: 0x44444444,
         };
 
-        let addr2 = addr1.clone();
+        let addr2 = addr1;
 
         assert_eq!(addr1.vendor_id, addr2.vendor_id);
         assert_eq!(addr1.product_code, addr2.product_code);

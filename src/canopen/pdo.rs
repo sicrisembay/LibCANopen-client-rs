@@ -118,7 +118,7 @@ impl PdoManager {
     ///
     /// PDO range: 0x180-0x57F (TPDO1-4 and RPDO1-4 for all nodes)
     pub fn is_pdo_message(cob_id: u16) -> bool {
-        cob_id >= 0x180 && cob_id <= 0x57F
+        (0x180..=0x57F).contains(&cob_id)
     }
 
     /// Get the most recent PDO data for a specific COB-ID

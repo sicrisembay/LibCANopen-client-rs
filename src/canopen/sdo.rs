@@ -267,7 +267,7 @@ impl SdoClient {
                                 // Start segmented transfer
                                 transfer.state = SdoState::SegmentTransfer;
                                 transfer.toggle_bit = false;
-                                self.send_download_segment(&mut transfer).await?;
+                                self.send_download_segment(&transfer).await?;
                             }
                         }
                     }
@@ -290,7 +290,7 @@ impl SdoClient {
                                 } else {
                                     // Send next segment
                                     transfer.toggle_bit = !transfer.toggle_bit;
-                                    self.send_download_segment(&mut transfer).await?;
+                                    self.send_download_segment(&transfer).await?;
                                 }
                             } else {
                                 // Toggle bit error
@@ -520,8 +520,7 @@ impl SdoClient {
         let n = 7 - bytes_to_send; // Number of bytes that do NOT contain data
         let c = remaining_bytes <= 7; // Last segment
 
-        let command = 0x00
-            | if transfer.toggle_bit { 0x10 } else { 0x00 }
+        let command = if transfer.toggle_bit { 0x10 } else { 0x00 }
             | if c { 0x01 } else { 0x00 }
             | ((n as u8) << 1);
 
@@ -793,17 +792,17 @@ mod tests {
     #[test]
     fn test_sdo_transfer_type_determination() {
         // Data <= 4 bytes should be expedited
-        let data_1 = vec![0x42];
+        let data_1 = [0x42];
         assert!(data_1.len() <= 4);
 
-        let data_4 = vec![0x01, 0x02, 0x03, 0x04];
+        let data_4 = [0x01, 0x02, 0x03, 0x04];
         assert!(data_4.len() <= 4);
 
         // Data > 4 bytes should be segmented
-        let data_5 = vec![0x01, 0x02, 0x03, 0x04, 0x05];
+        let data_5 = [0x01, 0x02, 0x03, 0x04, 0x05];
         assert!(data_5.len() > 4);
 
-        let data_100 = vec![0u8; 100];
+        let data_100 = [0u8; 100];
         assert!(data_100.len() > 4);
     }
 
@@ -853,7 +852,7 @@ mod tests {
         assert_eq!(cmd_3bytes, 0x27);
 
         // 4 bytes data: n = 0
-        let cmd_4bytes = 0x23 | (0 << 2);
+        let cmd_4bytes = 0x23;
         assert_eq!(cmd_4bytes, 0x23);
     }
 
@@ -886,19 +885,19 @@ mod tests {
         // Download segment: toggle + c (last) + n (number of invalid bytes)
 
         // First segment, not last, 7 bytes valid (n=0)
-        let cmd = 0x00 | 0x00 | 0x00 | (0 << 1);
+        let cmd = 0x00;
         assert_eq!(cmd, 0x00);
 
         // Second segment (toggle=1), not last, 7 bytes valid
-        let cmd = 0x00 | 0x10 | 0x00 | (0 << 1);
+        let cmd = 0x10;
         assert_eq!(cmd, 0x10);
 
         // Last segment (c=1), toggle=0, 5 bytes valid (n=2)
-        let cmd = 0x00 | 0x00 | 0x01 | (2 << 1);
+        let cmd = 0x01 | (2 << 1);
         assert_eq!(cmd, 0x05);
 
         // Last segment (c=1), toggle=1, 3 bytes valid (n=4)
-        let cmd = 0x00 | 0x10 | 0x01 | (4 << 1);
+        let cmd = 0x10 | 0x01 | (4 << 1);
         assert_eq!(cmd, 0x19);
     }
 
@@ -916,7 +915,7 @@ mod tests {
         assert_eq!(resp_2, 0x4B);
 
         // 4 bytes: n=0
-        let resp_4 = 0x43 | (0 << 2);
+        let resp_4 = 0x43;
         assert_eq!(resp_4, 0x43);
     }
 
@@ -934,16 +933,16 @@ mod tests {
         // Upload segment response: 0x00 + toggle + c (last) + n
 
         // First segment, not last, 7 bytes valid
-        let resp = 0x00 | 0x00 | 0x00 | (0 << 1);
+        let resp = 0x00;
         assert_eq!(resp, 0x00);
         assert_eq!(resp & 0x60, 0x00); // Segment response
 
         // Second segment (toggle=1), not last, 7 bytes
-        let resp = 0x00 | 0x10 | 0x00 | (0 << 1);
+        let resp = 0x10;
         assert_eq!(resp, 0x10);
 
         // Last segment, toggle=0, 4 bytes valid (n=3)
-        let resp = 0x00 | 0x00 | 0x01 | (3 << 1);
+        let resp = 0x01 | (3 << 1);
         assert_eq!(resp, 0x07);
         assert_eq!(resp & 0x01, 0x01); // Last segment
     }
@@ -980,11 +979,11 @@ mod tests {
         // Common SDO abort codes
         let toggle_bit_error = 0x05030000u32;
         let timeout = 0x05040000u32;
-        let command_specifier = 0x05040001u32;
+        let _command_specifier = 0x05040001u32;
         let object_not_exist = 0x06020000u32;
-        let access_failed = 0x06010000u32;
-        let write_only = 0x06010001u32;
-        let read_only = 0x06010002u32;
+        let _access_failed = 0x06010000u32;
+        let _write_only = 0x06010001u32;
+        let _read_only = 0x06010002u32;
 
         // Verify they're different
         assert_ne!(toggle_bit_error, timeout);
@@ -1015,10 +1014,10 @@ mod tests {
     #[test]
     fn test_expedited_data_packing() {
         // Test packing data into expedited SDO message
-        let data = vec![0x12, 0x34, 0x56, 0x78];
+        let data = [0x12, 0x34, 0x56, 0x78];
 
         // Data goes in bytes 4-7
-        let mut msg = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let mut msg = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         for (i, &byte) in data.iter().take(4).enumerate() {
             msg[4 + i] = byte;
         }
@@ -1074,22 +1073,22 @@ mod tests {
         // Toggle bit should alternate: false, true, false, true...
         let mut toggle = false;
 
-        assert_eq!(toggle, false);
+        assert!(!toggle);
         toggle = !toggle;
-        assert_eq!(toggle, true);
+        assert!(toggle);
         toggle = !toggle;
-        assert_eq!(toggle, false);
+        assert!(!toggle);
         toggle = !toggle;
-        assert_eq!(toggle, true);
+        assert!(toggle);
     }
 
     #[test]
     fn test_sdo_message_length() {
         // All SDO messages are 8 bytes
-        let msg1 = vec![0x40, 0x00, 0x10, 0x01, 0x00, 0x00, 0x00, 0x00];
+        let msg1 = [0x40, 0x00, 0x10, 0x01, 0x00, 0x00, 0x00, 0x00];
         assert_eq!(msg1.len(), 8);
 
-        let msg2 = vec![0x23, 0x00, 0x10, 0x01, 0x42, 0x00, 0x00, 0x00];
+        let msg2 = [0x23, 0x00, 0x10, 0x01, 0x42, 0x00, 0x00, 0x00];
         assert_eq!(msg2.len(), 8);
     }
 
@@ -1140,7 +1139,7 @@ mod tests {
     #[test]
     fn test_multi_segment_transfer_scenario() {
         // Simulate a 20-byte transfer (3 segments: 7+7+6)
-        let data = vec![0u8; 20];
+        let data = [0u8; 20];
         let segment_size = 7;
 
         let mut segment_index = 0;
@@ -1148,7 +1147,7 @@ mod tests {
         let mut toggle = false;
 
         while bytes_sent < data.len() {
-            let start = segment_index * segment_size;
+            let _start = segment_index * segment_size;
             let remaining = data.len() - bytes_sent;
             let this_segment_size = remaining.min(segment_size);
             let n = segment_size - this_segment_size;
@@ -1158,18 +1157,18 @@ mod tests {
             if segment_index == 0 {
                 assert_eq!(this_segment_size, 7);
                 assert_eq!(n, 0);
-                assert_eq!(is_last, false);
-                assert_eq!(toggle, false);
+                assert!(!is_last);
+                assert!(!toggle);
             } else if segment_index == 1 {
                 assert_eq!(this_segment_size, 7);
                 assert_eq!(n, 0);
-                assert_eq!(is_last, false);
-                assert_eq!(toggle, true);
+                assert!(!is_last);
+                assert!(toggle);
             } else if segment_index == 2 {
                 assert_eq!(this_segment_size, 6);
                 assert_eq!(n, 1);
-                assert_eq!(is_last, true);
-                assert_eq!(toggle, false);
+                assert!(is_last);
+                assert!(!toggle);
             }
 
             bytes_sent += this_segment_size;
@@ -1184,7 +1183,7 @@ mod tests {
     #[test]
     fn test_sdo_response_parsing_expedited() {
         // Simulate parsing an expedited upload response with 2 bytes
-        let response = vec![0x4B, 0x18, 0x10, 0x01, 0x34, 0x12, 0x00, 0x00];
+        let response = [0x4B, 0x18, 0x10, 0x01, 0x34, 0x12, 0x00, 0x00];
 
         let command = response[0];
         assert_eq!(command & 0x43, 0x43); // Expedited upload response
@@ -1206,7 +1205,7 @@ mod tests {
     #[test]
     fn test_sdo_abort_parsing() {
         // Simulate parsing an abort message
-        let abort = vec![0x80, 0x18, 0x10, 0x01, 0x00, 0x00, 0x02, 0x06];
+        let abort = [0x80, 0x18, 0x10, 0x01, 0x00, 0x00, 0x02, 0x06];
 
         let command = abort[0];
         assert_eq!(command & 0x80, 0x80); // Abort
