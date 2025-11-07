@@ -59,20 +59,13 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-  # Build and test on multiple platforms
+  # Build and test on Windows (PEAK CAN hardware requirement)
   test:
     name: Test Suite
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
         rust: [stable, beta]
-        exclude:
-          # Only test beta on Ubuntu to save CI time
-          - os: windows-latest
-            rust: beta
-          - os: macos-latest
-            rust: beta
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     
     steps:
       - uses: actions/checkout@v4
@@ -86,19 +79,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: windows-${{ matrix.rust }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache cargo index
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+          key: windows-${{ matrix.rust }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache cargo build
         uses: actions/cache@v4
         with:
           path: target
-          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+          key: windows-${{ matrix.rust }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Build
         run: cargo build --verbose --all-targets
