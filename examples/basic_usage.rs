@@ -1,40 +1,30 @@
 // Basic usage example for libCANopen Simple
-use libcanopen_simple::*;
+use libcanopen_simple::{CANopenSimple, BusSpeed, Result};
+use libcanopen_simple::hardware::peak_can::{PeakCanAdapter, PcanHandle};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
     env_logger::init();
 
-    // Create PEAK CAN adapter
-    let peak_adapter = PeakCanAdapter::new(
-        PcanHandle::PcanUsbbus1, 
-        BusSpeed::Baud250K
-    );
+    println!("libCANopen-simple Basic Usage Example");
+    println!("=====================================");
+
+    // Create PEAK CAN adapter (handle and speed)
+    let peak_adapter = PeakCanAdapter::new(PcanHandle::PcanUsbbus1, BusSpeed::Baud250K);
 
     // Create CANopen instance
     let mut canopen = CANopenSimple::new(Box::new(peak_adapter));
 
-    println!("Connecting to CAN hardware...");
+    println!("Connecting to CAN hardware at 250 kbps...");
     
-    // Connect to hardware
-    canopen.connect().await?;
+    // Connect to hardware with specified bus speed
+    canopen.connect(BusSpeed::Baud250K).await?;
 
-    println!("Connected! Setting up event subscriptions...");
+    println!("Connected successfully!");
 
-    // Subscribe to events
-    let mut packet_rx = canopen.subscribe_packets();
-    
-    // Spawn a task to handle incoming messages
-    tokio::spawn(async move {
-        while let Ok(event) = packet_rx.recv().await {
-            println!("Received: {} with {} bytes at {:?}", 
-                event.message.id, 
-                event.message.data.len(),
-                event.timestamp
-            );
-        }
-    });
+    // Check connection status
+    println!("Connection status: {}", canopen.is_connected().await);
 
     println!("Sending test messages...");
 
@@ -47,8 +37,8 @@ async fn main() -> Result<()> {
     println!("Sent test PDO");
 
     // Keep running for a few seconds
-    println!("Running for 5 seconds...");
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    println!("Running for 3 seconds...");
+    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
     // Disconnect
     println!("Disconnecting...");

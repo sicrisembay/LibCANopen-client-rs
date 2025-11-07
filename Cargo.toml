@@ -1,16 +1,16 @@
 [package]
-name = "libcanopen-simple"
+name = "libcanopen-client-rs"
 version = "0.1.0"
 edition = "2021"
-authors = ["CANopen Simple Contributors"]
-description = "A simple CANopen library for Rust using PEAK CAN hardware"
-license = "GPL-3.0"
-repository = "https://github.com/yourusername/libcanopen-simple-rs"
+authors = ["Sicris Rey Embay"]
+description = "A CANopen client/master library for Rust using PEAK CAN hardware"
+license = "MIT"
+repository = "https://github.com/sicrisembay/LibCANopen-client-rs"
 keywords = ["canopen", "can", "industrial", "automation"]
 categories = ["embedded", "hardware-support"]
 
 [lib]
-name = "libcanopen_simple"
+name = "libcanopen_client"
 
 [dependencies]
 peak-can-sys = "0.1.2"          # PEAK CAN hardware interface

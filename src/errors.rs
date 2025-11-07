@@ -16,6 +16,12 @@ pub enum CANopenError {
     #[error("Invalid message format")]
     InvalidMessage,
     
+    #[error("Invalid data: {0}")]
+    InvalidData(String),
+    
+    #[error("Invalid length: {0}")]
+    InvalidLength(usize),
+    
     #[error("Node not found: {node_id}")]
     NodeNotFound { node_id: u8 },
     
@@ -27,6 +33,9 @@ pub enum CANopenError {
     
     #[error("Channel closed")]
     ChannelClosed,
+    
+    #[error("Not initialized")]
+    NotInitialized,
     
     #[error("PEAK CAN error: {0}")]
     PeakCan(String), // We'll handle peak-can-sys errors as strings for now
