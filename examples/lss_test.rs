@@ -1,5 +1,5 @@
 /// LSS (Layer Setting Services) Test Example
-/// 
+///
 /// This example demonstrates:
 /// - Selecting slaves by LSS address
 /// - Configuring node-ID
@@ -7,50 +7,47 @@
 /// - Inquiring LSS address and node-ID
 /// - Identifying remote slaves
 /// - Storing configuration
-
-use libcanopen_simple::*;
+use libcanopen_client::*;
 use tokio::time::{sleep, Duration};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .init();
-    
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     println!("libCANopen-simple LSS (Layer Setting Services) Test Example");
     println!("=============================================================\n");
-    
+
     // Create PEAK CAN adapter
     println!("Connecting to CAN hardware at 1 Mbps...");
-    let peak_adapter = PeakCanAdapter::new(
-        PcanHandle::PcanUsbbus1,
-        BusSpeed::Baud1M
-    );
-    
+    let peak_adapter = PeakCanAdapter::new(PcanHandle::PcanUsbbus1, BusSpeed::Baud1M);
+
     // Create CANopen instance
     let mut canopen = CANopenSimple::new(Box::new(peak_adapter));
-    
+
     // Connect to hardware
     canopen.connect(BusSpeed::Baud1M).await?;
     println!("Connected successfully!\n");
-    
+
     // Test 1: Switch to global configuration mode
     println!("1. LSS Global Mode Test");
     println!("=======================");
     println!("Switching all unconfigured slaves to configuration mode...");
-    
-    canopen.lss_switch_state_global(LssMode::Configuration).await?;
+
+    canopen
+        .lss_switch_state_global(LssMode::Configuration)
+        .await?;
     println!("✓ Switched to global configuration mode");
-    
+
     println!("Waiting 500ms for slaves to process...");
     sleep(Duration::from_millis(500)).await;
-    
+
     println!();
-    
+
     // Test 2: Inquire LSS address (for demonstration, may timeout if no unconfigured slave)
     println!("2. LSS Address Inquiry Test");
     println!("============================");
     println!("Attempting to inquire LSS address from slave in configuration mode...");
-    
+
     match canopen.lss_inquire_address(1000).await {
         Ok(address) => {
             println!("✓ LSS Address received:");
@@ -58,7 +55,7 @@ async fn main() -> Result<()> {
             println!("  Product Code:    0x{:08X}", address.product_code);
             println!("  Revision Number: 0x{:08X}", address.revision_number);
             println!("  Serial Number:   0x{:08X}", address.serial_number);
-            
+
             // Store for later use
             println!("\n  This address can be used for selective mode");
         }
@@ -70,49 +67,52 @@ async fn main() -> Result<()> {
             println!("⚠ Error: {:?}", e);
         }
     }
-    
+
     println!("\nWaiting 500ms before next test...");
     sleep(Duration::from_millis(500)).await;
-    
+
     println!();
-    
+
     // Test 3: Switch back to waiting mode
     println!("3. Switch to Waiting Mode");
     println!("=========================");
     canopen.lss_switch_state_global(LssMode::Waiting).await?;
     println!("✓ Switched back to waiting mode");
     println!();
-    
+
     // Test 4: Selective mode (example with known address)
     println!("4. LSS Selective Mode Test");
     println!("==========================");
     println!("Demonstrating selective mode with example address...");
-    
+
     // Example LSS address (replace with actual values from your device)
     let example_address = LssAddress {
-        vendor_id: 0x00000000,      // Replace with actual Vendor ID
-        product_code: 0x12345678,   // Replace with actual Product Code
+        vendor_id: 0x00000000,       // Replace with actual Vendor ID
+        product_code: 0x12345678,    // Replace with actual Product Code
         revision_number: 0x00010000, // Replace with actual Revision
         serial_number: 0xABCDEF00,   // Replace with actual Serial Number
     };
-    
+
     println!("Selecting slave with address:");
     println!("  Vendor ID:       0x{:08X}", example_address.vendor_id);
     println!("  Product Code:    0x{:08X}", example_address.product_code);
-    println!("  Revision Number: 0x{:08X}", example_address.revision_number);
+    println!(
+        "  Revision Number: 0x{:08X}",
+        example_address.revision_number
+    );
     println!("  Serial Number:   0x{:08X}", example_address.serial_number);
-    
+
     canopen.lss_switch_state_selective(&example_address).await?;
     println!("✓ Selective mode command sent");
     sleep(Duration::from_millis(100)).await;
-    
+
     println!();
-    
+
     // Test 5: Identify remote slave
     println!("5. LSS Identify Remote Slave Test");
     println!("==================================");
     println!("Checking if selected slave responds...");
-    
+
     match canopen.lss_identify_remote_slave(1000).await {
         Ok(true) => {
             println!("✓ Slave identified successfully!");
@@ -124,14 +124,14 @@ async fn main() -> Result<()> {
             println!("⚠ Error: {:?}", e);
         }
     }
-    
+
     println!();
-    
+
     // Test 6: Inquire current node-ID
     println!("6. LSS Inquire Node-ID Test");
     println!("============================");
     println!("Querying current node-ID from selected slave...");
-    
+
     match canopen.lss_inquire_node_id(1000).await {
         Ok(node_id) => {
             println!("✓ Current Node-ID: {}", node_id);
@@ -146,9 +146,9 @@ async fn main() -> Result<()> {
             println!("⚠ Error: {:?}", e);
         }
     }
-    
+
     println!();
-    
+
     // Test 7: Configure new node-ID (CAUTION: This will change the node-ID!)
     println!("7. LSS Configure Node-ID Test (DEMO ONLY)");
     println!("==========================================");
@@ -167,14 +167,14 @@ async fn main() -> Result<()> {
     println!("      Err(e) => println!(\"Timeout or error: {{:?}}\", e),");
     println!("  }}");
     println!();
-    
+
     // Uncomment to actually configure (BE CAREFUL!):
     /*
     let new_node_id = 10;
     match canopen.lss_configure_node_id(new_node_id, 1000).await {
         Ok(LssError::Success) => {
             println!("✓ Node-ID configured to {}", new_node_id);
-            
+
             // Store configuration to non-volatile memory
             println!("Storing configuration...");
             match canopen.lss_store_configuration(2000).await {
@@ -197,7 +197,7 @@ async fn main() -> Result<()> {
         }
     }
     */
-    
+
     // Test 8: Bit-rate configuration (DEMO ONLY)
     println!("8. LSS Configure Bit-Rate Test (DEMO ONLY)");
     println!("===========================================");
@@ -235,7 +235,7 @@ async fn main() -> Result<()> {
     println!("      Err(e) => println!(\"Error: {{:?}}\", e),");
     println!("  }}");
     println!();
-    
+
     // Test 9: Complete LSS workflow example
     println!("9. Complete LSS Workflow (Summary)");
     println!("===================================");
@@ -263,7 +263,7 @@ async fn main() -> Result<()> {
     println!("6. Switch back to waiting mode");
     println!("   → lss_switch_state_global(LssMode::Waiting)");
     println!();
-    
+
     // Test 10: LSS Error codes demonstration
     println!("10. LSS Error Codes");
     println!("===================");
@@ -274,16 +274,16 @@ async fn main() -> Result<()> {
     println!("  LssError::MediaAccessFailure - CAN communication error");
     println!("  LssError::InvalidParameter   - Invalid parameter value");
     println!();
-    
+
     println!("Cleaning up...");
-    
+
     // Make sure we're back in waiting mode
     canopen.lss_switch_state_global(LssMode::Waiting).await?;
-    
+
     // Disconnect
     canopen.disconnect().await?;
     println!("Disconnecting...");
-    
+
     println!("\nLSS test completed successfully!");
     println!("\n⚠ IMPORTANT NOTES:");
     println!("   - LSS operations modify slave configuration");
@@ -291,6 +291,6 @@ async fn main() -> Result<()> {
     println!("   - Bit-rate changes affect the entire CAN bus");
     println!("   - Store configuration to make changes permanent");
     println!("   - Some tests were disabled to prevent accidental changes");
-    
+
     Ok(())
 }

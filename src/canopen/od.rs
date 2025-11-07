@@ -1,7 +1,6 @@
 // CANopen Object Dictionary types and constants
 use serde::{Deserialize, Serialize};
 
-
 /// Object Dictionary Index type
 pub type ObjectIndex = u16;
 
@@ -72,7 +71,10 @@ impl DataType {
             DataType::Integer64 | DataType::Unsigned64 | DataType::Real64 => Some(8),
             DataType::TimeOfDay | DataType::TimeDifference => Some(6),
             // Variable length types
-            DataType::VisibleString | DataType::OctetString | DataType::UnicodeString | DataType::Domain => None,
+            DataType::VisibleString
+            | DataType::OctetString
+            | DataType::UnicodeString
+            | DataType::Domain => None,
         }
     }
 
@@ -83,17 +85,31 @@ impl DataType {
 
     /// Check if this is an integer type
     pub fn is_integer(&self) -> bool {
-        matches!(self, 
-            DataType::Integer8 | DataType::Integer16 | DataType::Integer24 | DataType::Integer32 |
-            DataType::Integer40 | DataType::Integer48 | DataType::Integer56 | DataType::Integer64
+        matches!(
+            self,
+            DataType::Integer8
+                | DataType::Integer16
+                | DataType::Integer24
+                | DataType::Integer32
+                | DataType::Integer40
+                | DataType::Integer48
+                | DataType::Integer56
+                | DataType::Integer64
         )
     }
 
     /// Check if this is an unsigned integer type
     pub fn is_unsigned(&self) -> bool {
-        matches!(self,
-            DataType::Unsigned8 | DataType::Unsigned16 | DataType::Unsigned24 | DataType::Unsigned32 |
-            DataType::Unsigned40 | DataType::Unsigned48 | DataType::Unsigned56 | DataType::Unsigned64
+        matches!(
+            self,
+            DataType::Unsigned8
+                | DataType::Unsigned16
+                | DataType::Unsigned24
+                | DataType::Unsigned32
+                | DataType::Unsigned40
+                | DataType::Unsigned48
+                | DataType::Unsigned56
+                | DataType::Unsigned64
         )
     }
 
@@ -134,7 +150,7 @@ pub mod standard_objects {
     // SDO Server Parameters (0x1200-0x127F)
     pub const SDO_SERVER_PARAMETER_BASE: ObjectIndex = 0x1200;
 
-    // SDO Client Parameters (0x1280-0x12FF)  
+    // SDO Client Parameters (0x1280-0x12FF)
     pub const SDO_CLIENT_PARAMETER_BASE: ObjectIndex = 0x1280;
 
     // RPDO Communication Parameters (0x1400-0x15FF)
@@ -158,13 +174,12 @@ pub mod device_profile {
     pub const MANUFACTURER_SPECIFIC_START: ObjectIndex = 0x2000;
     pub const MANUFACTURER_SPECIFIC_END: ObjectIndex = 0x5FFF;
 
-    // Standardized Device Profile (0x6000-0x9FFF)  
+    // Standardized Device Profile (0x6000-0x9FFF)
     pub const DEVICE_PROFILE_START: ObjectIndex = 0x6000;
     pub const DEVICE_PROFILE_END: ObjectIndex = 0x9FFF;
 }
 
 /// Emergency error codes (from message.rs but also used in OD)
-
 
 /// Access types for Object Dictionary entries
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -317,7 +332,7 @@ mod tests {
         let mapping = PdoMapping::new(0x6000, 0x01, 16);
         let encoded = mapping.encode();
         let decoded = PdoMapping::decode(encoded);
-        
+
         assert_eq!(mapping, decoded);
         assert_eq!(encoded, 0x60000110);
     }
@@ -327,7 +342,7 @@ mod tests {
         let code = SdoAbortCode::ObjectNotExist;
         let raw = code.to_u32();
         let decoded = SdoAbortCode::from_u32(raw);
-        
+
         assert_eq!(raw, 0x06020000);
         assert_eq!(decoded, Some(code));
     }

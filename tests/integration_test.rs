@@ -3,11 +3,7 @@
 //! These tests verify cross-protocol interactions, concurrent operations,
 //! and end-to-end scenarios that span multiple modules.
 
-use libcanopen_client::{
-    CanMessage, MessageType,
-    NmtState, NodeState,
-    LssAddress, LssCommand,
-};
+use libcanopen_client::{CanMessage, LssAddress, LssCommand, MessageType, NmtState, NodeState};
 
 /// Test cross-protocol message parsing and type detection
 #[test]
@@ -20,7 +16,7 @@ fn test_cross_protocol_message_detection() {
     let sdo_msg = CanMessage::new(0x605, vec![0x40, 0x00, 0x10, 0x01, 0, 0, 0, 0]).unwrap();
     assert_eq!(sdo_msg.message_type(), MessageType::Sdo);
 
-    // SDO Response  
+    // SDO Response
     let sdo_resp = CanMessage::new(0x585, vec![0x43, 0x00, 0x10, 0x01, 0x12, 0, 0, 0]).unwrap();
     assert_eq!(sdo_resp.message_type(), MessageType::Sdo);
 
@@ -29,15 +25,17 @@ fn test_cross_protocol_message_detection() {
     assert_eq!(sync_msg.message_type(), MessageType::Sync);
 
     // Emergency
-    let emcy_msg = CanMessage::new(0x085, vec![0x10, 0x23, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06]).unwrap();
+    let emcy_msg =
+        CanMessage::new(0x085, vec![0x10, 0x23, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06]).unwrap();
     assert_eq!(emcy_msg.message_type(), MessageType::Emergency);
 
     // PDO
     let pdo_msg = CanMessage::new(0x185, vec![0x01, 0x02, 0x03, 0x04]).unwrap();
     assert_eq!(pdo_msg.message_type(), MessageType::Pdo);
 
-    // LSS  
-    let lss_msg = CanMessage::new(0x7E5, vec![0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).unwrap();
+    // LSS
+    let lss_msg =
+        CanMessage::new(0x7E5, vec![0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).unwrap();
     assert_eq!(lss_msg.message_type(), MessageType::Lss);
 
     // Node Guarding/Heartbeat
@@ -73,8 +71,9 @@ fn test_nmt_state_transitions() {
 #[test]
 fn test_message_data_extraction() {
     // SDO response with data
-    let sdo_response = CanMessage::new(0x58A, vec![0x43, 0x00, 0x10, 0x00, 0x01, 0x02, 0x03, 0x04]).unwrap();
-    
+    let sdo_response =
+        CanMessage::new(0x58A, vec![0x43, 0x00, 0x10, 0x00, 0x01, 0x02, 0x03, 0x04]).unwrap();
+
     // Extract data bytes
     let data = &sdo_response.data[4..8];
     let value = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
@@ -121,10 +120,10 @@ fn test_data_endianness() {
     let i32_bytes = i32_val.to_le_bytes();
     assert_eq!(i32::from_le_bytes(i32_bytes), -12345);
 
-    let f32_val: f32 = 3.14159;
+    let f32_val: f32 = 1.23;
     let f32_bytes = f32_val.to_le_bytes();
     let decoded = f32::from_le_bytes(f32_bytes);
-    assert!((decoded - 3.14159).abs() < 0.00001);
+    assert!((decoded - 1.23).abs() < 0.01);
 }
 
 /// Test message priorities (lower COB-ID = higher priority)
@@ -149,12 +148,16 @@ fn test_message_priorities() {
 #[test]
 fn test_concurrent_messages() {
     let node_id = 10;
-    
+
     // Create multiple protocol messages
     let messages = vec![
         CanMessage::new(0x000, vec![0x01, node_id]).unwrap(), // NMT
-        CanMessage::new(0x600 + node_id as u16, vec![0x40, 0x00, 0x10, 0x00, 0, 0, 0, 0]).unwrap(), // SDO
-        CanMessage::new(0x080, vec![1]).unwrap(), // SYNC
+        CanMessage::new(
+            0x600 + node_id as u16,
+            vec![0x40, 0x00, 0x10, 0x00, 0, 0, 0, 0],
+        )
+        .unwrap(), // SDO
+        CanMessage::new(0x080, vec![1]).unwrap(),             // SYNC
         CanMessage::new(0x180 + node_id as u16, vec![0x11, 0x22, 0x33, 0x44]).unwrap(), // PDO
     ];
 

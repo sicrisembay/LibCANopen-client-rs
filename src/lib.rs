@@ -1,3 +1,6 @@
+// Allow dead code warnings for library code that may not be used by all consumers
+#![allow(dead_code)]
+
 //! # libCANopen Client - Complete CANopen Master Implementation
 //!
 //! A comprehensive, async CANopen master/client library for Rust with full protocol support
@@ -190,30 +193,24 @@
 
 // Module declarations
 mod canopen;
-pub mod hardware;
 mod errors;
+pub mod hardware;
 mod utils;
 
 // Public exports
-pub use errors::{CANopenError, Result};
 pub use canopen::{
-    CanMessage, CanId, MessageType,
-    SdoClient, SdoDirection, SdoRequest, SdoTransfer, SdoState,
-    NmtManager, NmtState, NodeState,
-    EventManager, MessageEvent,
-    PdoManager,
-    SyncManager,
-    EmcyManager, EmergencyMessage,
-    LssManager, LssAddress, LssCommand, LssError, LssMode, LssResponse,
+    CanId, CanMessage, EmcyManager, EmergencyMessage, EventManager, LssAddress, LssCommand,
+    LssError, LssManager, LssMode, LssResponse, MessageEvent, MessageType, NmtManager, NmtState,
+    NodeState, PdoManager, SdoClient, SdoDirection, SdoRequest, SdoState, SdoTransfer, SyncManager,
 };
+pub use errors::{CANopenError, Result};
 pub use hardware::{
-    CanHardware,
-    peak_can::{PeakCanAdapter, PcanHandle},
-    BusSpeed,
+    peak_can::{PcanHandle, PeakCanAdapter},
+    BusSpeed, CanHardware,
 };
 
-use tokio::sync::{mpsc, RwLock};
 use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
 
 /// Main CANopen library interface
 #[derive(Clone)]
@@ -243,7 +240,7 @@ impl CANopenSimple {
         let emcy_manager = Arc::new(RwLock::new(EmcyManager::new()));
         // LSS manager will be initialized later with proper outgoing channel
         let lss_manager = Arc::new(RwLock::new(None));
-        
+
         Self {
             hardware: Arc::new(RwLock::new(hardware)),
             event_manager,
@@ -262,10 +259,10 @@ impl CANopenSimple {
     pub async fn connect(&mut self, bus_speed: BusSpeed) -> Result<()> {
         self.hardware.write().await.connect(bus_speed).await?;
         *self.is_running.write().await = true;
-        
+
         // Start message processing task
         self.start_message_processing().await;
-        
+
         log::info!("CANopen library connected and running");
         Ok(())
     }
@@ -274,7 +271,7 @@ impl CANopenSimple {
     pub async fn disconnect(&mut self) -> Result<()> {
         *self.is_running.write().await = false;
         self.hardware.write().await.disconnect().await?;
-        
+
         log::info!("CANopen library disconnected");
         Ok(())
     }
@@ -305,19 +302,19 @@ impl CANopenSimple {
         tokio::spawn(async move {
             // Create outgoing message channel for sending CAN messages to hardware
             let (outgoing_tx, mut outgoing_rx) = mpsc::channel::<CanMessage>(100);
-            
+
             // Initialize NMT manager with outgoing message channel
             {
                 let mut nmt_lock = nmt_manager.write().await;
                 *nmt_lock = Some(NmtManager::new(outgoing_tx.clone()));
             }
-            
+
             // Initialize SYNC manager (doesn't need outgoing channel for reception)
             {
                 let mut sync_lock = sync_manager.write().await;
                 *sync_lock = Some(SyncManager::new());
             }
-            
+
             // Initialize LSS manager with outgoing message channel
             {
                 let lss = LssManager::new(outgoing_tx.clone());
@@ -325,26 +322,26 @@ impl CANopenSimple {
                 let mut lss_lock = lss_manager.write().await;
                 *lss_lock = Some(lss);
             }
-            
+
             // Create SDO client with outgoing message channel
             let (mut sdo_client, sdo_req_tx, sdo_msg_tx) = SdoClient::new(outgoing_tx.clone());
-            
+
             // Store the SDO request sender for API methods to use
             {
                 let mut sdo_tx_lock = sdo_request_tx.write().await;
                 *sdo_tx_lock = Some(sdo_req_tx);
             }
-            
+
             // Subscribe to messages from hardware first
             let hw = hardware.read().await;
             let mut message_rx = hw.subscribe_messages();
             drop(hw); // Release the lock
-            
-            // Start SDO client processing in separate task  
+
+            // Start SDO client processing in separate task
             let _sdo_client_handle = tokio::spawn(async move {
                 sdo_client.run().await;
             });
-            
+
             // Start outgoing message handler task to send messages to hardware
             let hw_clone = Arc::clone(&hardware);
             let is_running_clone = Arc::clone(&is_running);
@@ -352,8 +349,10 @@ impl CANopenSimple {
                 while *is_running_clone.read().await {
                     match tokio::time::timeout(
                         std::time::Duration::from_millis(100),
-                        outgoing_rx.recv()
-                    ).await {
+                        outgoing_rx.recv(),
+                    )
+                    .await
+                    {
                         Ok(Some(msg)) => {
                             log::debug!("Sending SDO request: ID={:03X}", msg.id.raw());
                             if let Err(e) = hw_clone.read().await.send_message(&msg).await {
@@ -371,37 +370,36 @@ impl CANopenSimple {
                     }
                 }
             });
-            
+
             // Main message processing loop
             while *is_running.read().await {
                 // Use a timeout to check if we should continue running
-                match tokio::time::timeout(
-                    std::time::Duration::from_millis(100),
-                    message_rx.recv()
-                ).await {
+                match tokio::time::timeout(std::time::Duration::from_millis(100), message_rx.recv())
+                    .await
+                {
                     Ok(Some(can_msg)) => {
                         let msg_type = can_msg.message_type();
                         let cob_id = can_msg.id.raw();
-                        
+
                         // Process LSS responses (COB-ID 0x7E4 - slave to master, CiA-305)
                         if cob_id == 0x7E4 {
                             if let Some(lss) = lss_manager.read().await.as_ref() {
                                 lss.process_response(&can_msg.data).await;
                             }
                         }
-                        
                         // Process SYNC messages (COB-ID 0x80)
                         else if cob_id == 0x80 {
                             if let Some(sync) = sync_manager.write().await.as_ref() {
                                 sync.process_sync(&can_msg.data);
                             }
                         }
-                        
                         // Process Emergency messages (COB-ID 0x81-0xFF)
                         else if cob_id >= 0x81 && cob_id <= 0xFF {
-                            emcy_manager.write().await.process_emcy(cob_id, &can_msg.data);
+                            emcy_manager
+                                .write()
+                                .await
+                                .process_emcy(cob_id, &can_msg.data);
                         }
-                        
                         // Process heartbeat messages for NMT state tracking
                         else if msg_type == MessageType::NmtErrorControl {
                             if let Some(nmt) = nmt_manager.write().await.as_mut() {
@@ -410,17 +408,16 @@ impl CANopenSimple {
                                 }
                             }
                         }
-                        
                         // Process PDO messages (0x180-0x57F)
                         else if cob_id >= 0x180 && cob_id <= 0x57F {
                             if let Err(e) = pdo_manager.write().await.process_pdo(&can_msg) {
                                 log::warn!("Failed to process PDO: {:?}", e);
                             }
                         }
-                        
+
                         // Forward CAN messages to SDO client for processing
                         let _ = sdo_msg_tx.send(can_msg.clone()).await;
-                        
+
                         // Forward to event manager
                         event_manager.emit_message(can_msg);
                     }
@@ -439,7 +436,7 @@ impl CANopenSimple {
     }
 
     // Event subscription methods
-    
+
     /// Subscribe to all packet events
     pub fn subscribe_packets(&self) -> tokio::sync::broadcast::Receiver<MessageEvent> {
         self.event_manager.subscribe_packets()
@@ -473,7 +470,7 @@ impl CANopenSimple {
     // NMT Methods
 
     /// Start a remote node (transition to Operational state)
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Target node ID (0 = all nodes)
     pub async fn nmt_start(&self, node_id: u8) -> Result<()> {
@@ -485,7 +482,7 @@ impl CANopenSimple {
     }
 
     /// Stop a remote node (transition to Stopped state)
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Target node ID (0 = all nodes)
     pub async fn nmt_stop(&self, node_id: u8) -> Result<()> {
@@ -497,7 +494,7 @@ impl CANopenSimple {
     }
 
     /// Put a node into Pre-Operational state
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Target node ID (0 = all nodes)
     pub async fn nmt_enter_pre_operational(&self, node_id: u8) -> Result<()> {
@@ -509,7 +506,7 @@ impl CANopenSimple {
     }
 
     /// Reset a node (full device reset)
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Target node ID (0 = all nodes)
     pub async fn nmt_reset_node(&self, node_id: u8) -> Result<()> {
@@ -521,7 +518,7 @@ impl CANopenSimple {
     }
 
     /// Reset communication parameters of a node
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Target node ID (0 = all nodes)
     pub async fn nmt_reset_communication(&self, node_id: u8) -> Result<()> {
@@ -533,7 +530,7 @@ impl CANopenSimple {
     }
 
     /// Check if a node has been discovered (received heartbeat)
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Node ID to check
     pub async fn nmt_is_node_found(&self, node_id: u8) -> bool {
@@ -545,7 +542,7 @@ impl CANopenSimple {
     }
 
     /// Get the current state of a node
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Node ID to query
     pub async fn nmt_get_node_state(&self, node_id: u8) -> Option<canopen::nmt::NmtState> {
@@ -557,7 +554,7 @@ impl CANopenSimple {
     }
 
     /// Check if a node's heartbeat is within the timeout period
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - Node ID to check
     /// * `timeout` - Maximum duration since last heartbeat
@@ -579,13 +576,13 @@ impl CANopenSimple {
     }
 
     // PDO Methods
-    
+
     /// Send a PDO message with the specified COB-ID and payload
-    /// 
+    ///
     /// # Arguments
     /// * `cob_id` - COB-ID for the PDO (e.g., 0x200 for RPDO1 to node 0)
     /// * `payload` - Data bytes to send (up to 8 bytes for standard CAN)
-    /// 
+    ///
     /// # Example
     /// ```ignore
     /// // Send RPDO1 to node 1 (COB-ID = 0x201)
@@ -597,14 +594,14 @@ impl CANopenSimple {
     }
 
     /// Register a callback handler for incoming PDO messages
-    /// 
+    ///
     /// When a PDO is received with the specified COB-ID, the callback will be invoked
     /// with the PDO data payload.
-    /// 
+    ///
     /// # Arguments
     /// * `cob_id` - COB-ID to listen for (e.g., 0x181 for TPDO1 from node 1)
     /// * `handler` - Callback function that receives PDO data bytes
-    /// 
+    ///
     /// # Example
     /// ```ignore
     /// // Listen for TPDO1 from node 1
@@ -616,22 +613,28 @@ impl CANopenSimple {
     where
         F: Fn(&[u8]) + Send + Sync + 'static,
     {
-        self.pdo_manager.write().await.register_pdo_handler(cob_id, handler);
+        self.pdo_manager
+            .write()
+            .await
+            .register_pdo_handler(cob_id, handler);
     }
 
     /// Unregister a PDO callback handler
-    /// 
+    ///
     /// # Arguments
     /// * `cob_id` - COB-ID to stop listening for
     pub async fn unregister_pdo_handler(&self, cob_id: u16) {
-        self.pdo_manager.write().await.unregister_pdo_handler(cob_id);
+        self.pdo_manager
+            .write()
+            .await
+            .unregister_pdo_handler(cob_id);
     }
 
     /// Get the most recently received PDO data for a specific COB-ID
-    /// 
+    ///
     /// Returns None if no PDO has been received for this COB-ID.
     /// This is useful when not using callbacks.
-    /// 
+    ///
     /// # Arguments
     /// * `cob_id` - COB-ID to query
     pub async fn get_recent_pdo(&self, cob_id: u16) -> Option<Vec<u8>> {
@@ -653,7 +656,9 @@ impl CANopenSimple {
         subindex: u8,
         timeout_ms: u32,
     ) -> Result<u8> {
-        let data = self.sdo_read_data(node_id, index, subindex, timeout_ms).await?;
+        let data = self
+            .sdo_read_data(node_id, index, subindex, timeout_ms)
+            .await?;
         if data.len() != 1 {
             return Err(CANopenError::InvalidData(format!(
                 "Expected 1 byte for u8, got {}",
@@ -671,7 +676,9 @@ impl CANopenSimple {
         subindex: u8,
         timeout_ms: u32,
     ) -> Result<u16> {
-        let data = self.sdo_read_data(node_id, index, subindex, timeout_ms).await?;
+        let data = self
+            .sdo_read_data(node_id, index, subindex, timeout_ms)
+            .await?;
         if data.len() != 2 {
             return Err(CANopenError::InvalidData(format!(
                 "Expected 2 bytes for u16, got {}",
@@ -689,7 +696,9 @@ impl CANopenSimple {
         subindex: u8,
         timeout_ms: u32,
     ) -> Result<u32> {
-        let data = self.sdo_read_data(node_id, index, subindex, timeout_ms).await?;
+        let data = self
+            .sdo_read_data(node_id, index, subindex, timeout_ms)
+            .await?;
         if data.len() != 4 {
             return Err(CANopenError::InvalidData(format!(
                 "Expected 4 bytes for u32, got {}",
@@ -708,7 +717,7 @@ impl CANopenSimple {
         timeout_ms: u32,
     ) -> Result<Vec<u8>> {
         let (response_tx, response_rx) = tokio::sync::oneshot::channel();
-        
+
         let request = SdoRequest::new(
             node_id,
             SdoDirection::Upload,
@@ -722,16 +731,23 @@ impl CANopenSimple {
         // Get the SDO request sender
         let sdo_tx = {
             let sdo_tx_lock = self.sdo_request_tx.read().await;
-            sdo_tx_lock.as_ref().ok_or(CANopenError::Connection)?.clone()
+            sdo_tx_lock
+                .as_ref()
+                .ok_or(CANopenError::Connection)?
+                .clone()
         };
-        
-        sdo_tx.send(request).await
+
+        sdo_tx
+            .send(request)
+            .await
             .map_err(|_| CANopenError::ChannelClosed)?;
 
         match tokio::time::timeout(
             tokio::time::Duration::from_millis(timeout_ms as u64 + 1000),
-            response_rx
-        ).await {
+            response_rx,
+        )
+        .await
+        {
             Ok(Ok(data)) => data,
             Ok(Err(_)) => Err(CANopenError::ChannelClosed),
             Err(_) => Err(CANopenError::Timeout),
@@ -747,7 +763,8 @@ impl CANopenSimple {
         value: u8,
         timeout_ms: u32,
     ) -> Result<()> {
-        self.sdo_write_data(node_id, index, subindex, vec![value], timeout_ms).await
+        self.sdo_write_data(node_id, index, subindex, vec![value], timeout_ms)
+            .await
     }
 
     /// Write a 16-bit unsigned integer to the object dictionary
@@ -760,7 +777,8 @@ impl CANopenSimple {
         timeout_ms: u32,
     ) -> Result<()> {
         let bytes = value.to_le_bytes();
-        self.sdo_write_data(node_id, index, subindex, bytes.to_vec(), timeout_ms).await
+        self.sdo_write_data(node_id, index, subindex, bytes.to_vec(), timeout_ms)
+            .await
     }
 
     /// Write a 32-bit unsigned integer to the object dictionary
@@ -773,7 +791,8 @@ impl CANopenSimple {
         timeout_ms: u32,
     ) -> Result<()> {
         let bytes = value.to_le_bytes();
-        self.sdo_write_data(node_id, index, subindex, bytes.to_vec(), timeout_ms).await
+        self.sdo_write_data(node_id, index, subindex, bytes.to_vec(), timeout_ms)
+            .await
     }
 
     /// Write raw data to the object dictionary
@@ -786,7 +805,7 @@ impl CANopenSimple {
         timeout_ms: u32,
     ) -> Result<()> {
         let (response_tx, response_rx) = tokio::sync::oneshot::channel();
-        
+
         let request = SdoRequest::new(
             node_id,
             SdoDirection::Download,
@@ -800,34 +819,41 @@ impl CANopenSimple {
         // Get the SDO request sender
         let sdo_tx = {
             let sdo_tx_lock = self.sdo_request_tx.read().await;
-            sdo_tx_lock.as_ref().ok_or(CANopenError::Connection)?.clone()
+            sdo_tx_lock
+                .as_ref()
+                .ok_or(CANopenError::Connection)?
+                .clone()
         };
-        
-        sdo_tx.send(request).await
+
+        sdo_tx
+            .send(request)
+            .await
             .map_err(|_| CANopenError::ChannelClosed)?;
 
         match tokio::time::timeout(
             tokio::time::Duration::from_millis(timeout_ms as u64 + 1000),
-            response_rx
-        ).await {
+            response_rx,
+        )
+        .await
+        {
             Ok(result) => {
                 let _response = result.map_err(|_| CANopenError::ChannelClosed)?;
                 Ok(())
-            },
+            }
             Err(_) => Err(CANopenError::Timeout),
         }
     }
 
     // ===== SYNC Methods =====
-    
+
     /// Send a SYNC message
-    /// 
+    ///
     /// Broadcasts a SYNC message to all nodes on the network.
     /// If counter is enabled, the counter will be incremented automatically.
-    /// 
+    ///
     /// # Example
     /// ```no_run
-    /// # use libcanopen_simple::*;
+    /// # use libcanopen_client::*;
     /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
     /// canopen.send_sync().await?;
     /// # Ok(())
@@ -843,9 +869,9 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Enable or disable SYNC counter
-    /// 
+    ///
     /// When enabled, SYNC messages include a 1-byte counter (1-240, wrapping to 1).
     /// When disabled, SYNC messages have no data bytes.
     pub async fn set_sync_counter_enabled(&self, enabled: bool) -> Result<()> {
@@ -857,7 +883,7 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Get current SYNC counter value
     pub async fn get_sync_counter(&self) -> Result<u8> {
         let sync_lock = self.sync_manager.read().await;
@@ -867,14 +893,14 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Register a callback for SYNC reception
-    /// 
+    ///
     /// The callback receives the SYNC counter value (0 if no counter present).
-    /// 
+    ///
     /// # Example
     /// ```no_run
-    /// # use libcanopen_simple::*;
+    /// # use libcanopen_client::*;
     /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
     /// canopen.register_sync_callback(|counter| {
     ///     println!("SYNC received: counter={}", counter);
@@ -894,7 +920,7 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Unregister SYNC callback
     pub async fn unregister_sync_callback(&self) -> Result<()> {
         let sync_lock = self.sync_manager.read().await;
@@ -905,22 +931,22 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     // ===== Emergency (EMCY) Methods =====
-    
+
     /// Register an emergency message handler for a specific node
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - The node ID to monitor (1-127)
     /// * `handler` - Callback function invoked when emergency is received
-    /// 
+    ///
     /// # Example
     /// ```no_run
-    /// # use libcanopen_simple::*;
+    /// # use libcanopen_client::*;
     /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
     /// canopen.register_emcy_handler(5, |emcy| {
-    ///     println!("Emergency from node {}: Error 0x{:04X} - {}", 
-    ///         emcy.node_id, 
+    ///     println!("Emergency from node {}: Error 0x{:04X} - {}",
+    ///         emcy.node_id,
     ///         emcy.error_code,
     ///         emcy.error_code_description());
     /// }).await?;
@@ -935,39 +961,39 @@ impl CANopenSimple {
         emcy_lock.register_emcy_handler(node_id, handler);
         Ok(())
     }
-    
+
     /// Unregister emergency handler for a node
     pub async fn unregister_emcy_handler(&self, node_id: u8) -> Result<()> {
         let emcy_lock = self.emcy_manager.read().await;
         emcy_lock.unregister_emcy_handler(node_id);
         Ok(())
     }
-    
+
     /// Get the most recent emergency message from a node
-    /// 
+    ///
     /// Returns `None` if no emergency has been received from this node.
     pub async fn get_recent_emcy(&self, node_id: u8) -> Option<EmergencyMessage> {
         let emcy_lock = self.emcy_manager.read().await;
         emcy_lock.get_recent_emcy(node_id)
     }
-    
+
     /// Clear all stored emergency messages
     pub async fn clear_recent_emcy(&self) -> Result<()> {
         let emcy_lock = self.emcy_manager.read().await;
         emcy_lock.clear_recent_emcy();
         Ok(())
     }
-    
+
     // ===== LSS (Layer Setting Services) Methods =====
-    
+
     /// Switch LSS to global state (affects all unconfigured slaves)
-    /// 
+    ///
     /// # Arguments
     /// * `mode` - LssMode::Waiting or LssMode::Configuration
-    /// 
+    ///
     /// # Example
     /// ```no_run
-    /// # use libcanopen_simple::*;
+    /// # use libcanopen_client::*;
     /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
     /// // Switch all unconfigured slaves to configuration mode
     /// canopen.lss_switch_state_global(LssMode::Configuration).await?;
@@ -982,15 +1008,15 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Switch LSS to selective state (select specific slave by LSS address)
-    /// 
+    ///
     /// # Arguments
     /// * `address` - LSS address (Vendor-ID, Product-Code, Revision, Serial Number)
-    /// 
+    ///
     /// # Example
     /// ```no_run
-    /// # use libcanopen_simple::*;
+    /// # use libcanopen_client::*;
     /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
     /// let address = LssAddress {
     ///     vendor_id: 0x00000000,
@@ -1010,19 +1036,19 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Configure node-ID for selected LSS slave
-    /// 
+    ///
     /// # Arguments
     /// * `node_id` - New node ID (1-127)
     /// * `timeout_ms` - Timeout in milliseconds
-    /// 
+    ///
     /// # Returns
     /// * `Ok(LssError)` - LSS error code (Success if OK)
-    /// 
+    ///
     /// # Example
     /// ```no_run
-    /// # use libcanopen_simple::*;
+    /// # use libcanopen_client::*;
     /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
     /// let error = canopen.lss_configure_node_id(10, 1000).await?;
     /// if error == LssError::Success {
@@ -1039,14 +1065,14 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Configure bit-rate for selected LSS slave
-    /// 
+    ///
     /// # Arguments
     /// * `table_selector` - Bit timing table selector (0 = CiA 301)
     /// * `table_index` - Index in table (0=1Mbps, 1=800kbps, 2=500kbps, etc.)
     /// * `timeout_ms` - Timeout in milliseconds
-    /// 
+    ///
     /// Common table_index values (CiA 301):
     /// - 0: 1000 kbit/s
     /// - 1: 800 kbit/s
@@ -1064,17 +1090,18 @@ impl CANopenSimple {
     ) -> Result<LssError> {
         let lss_lock = self.lss_manager.read().await;
         if let Some(lss) = lss_lock.as_ref() {
-            lss.configure_bit_rate(table_selector, table_index, timeout_ms).await
+            lss.configure_bit_rate(table_selector, table_index, timeout_ms)
+                .await
         } else {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Activate configured bit-rate
-    /// 
+    ///
     /// # Arguments
     /// * `switch_delay_ms` - Delay before switching (in milliseconds)
-    /// 
+    ///
     /// Note: After calling this, you must also switch your CAN hardware
     /// to the new bit-rate after the delay!
     pub async fn lss_activate_bit_rate(&self, switch_delay_ms: u16) -> Result<()> {
@@ -1085,9 +1112,9 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Store configuration to non-volatile memory
-    /// 
+    ///
     /// Saves the configured node-ID and bit-rate to the slave's persistent storage.
     pub async fn lss_store_configuration(&self, timeout_ms: u32) -> Result<LssError> {
         let lss_lock = self.lss_manager.read().await;
@@ -1097,14 +1124,14 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Inquire LSS address from selected slave
-    /// 
+    ///
     /// Returns the LSS address (Vendor-ID, Product-Code, Revision, Serial Number)
-    /// 
+    ///
     /// # Example
     /// ```no_run
-    /// # use libcanopen_simple::*;
+    /// # use libcanopen_client::*;
     /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
     /// let address = canopen.lss_inquire_address(1000).await?;
     /// println!("Vendor ID: 0x{:08X}", address.vendor_id);
@@ -1122,7 +1149,7 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Inquire current node-ID from selected slave
     pub async fn lss_inquire_node_id(&self, timeout_ms: u32) -> Result<u8> {
         let lss_lock = self.lss_manager.read().await;
@@ -1132,11 +1159,11 @@ impl CANopenSimple {
             Err(CANopenError::NotInitialized)
         }
     }
-    
+
     /// Identify remote slave
-    /// 
+    ///
     /// Check if a slave with the previously selected LSS address responds.
-    /// 
+    ///
     /// # Returns
     /// * `Ok(true)` - Slave responded
     /// * `Ok(false)` - No response (timeout)

@@ -1,6 +1,6 @@
 // Basic usage example for libCANopen Simple
-use libcanopen_simple::{CANopenSimple, BusSpeed, Result};
-use libcanopen_simple::hardware::peak_can::{PeakCanAdapter, PcanHandle};
+use libcanopen_client::hardware::peak_can::{PcanHandle, PeakCanAdapter};
+use libcanopen_client::{BusSpeed, CANopenSimple, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
     let mut canopen = CANopenSimple::new(Box::new(peak_adapter));
 
     println!("Connecting to CAN hardware at 250 kbps...");
-    
+
     // Connect to hardware with specified bus speed
     canopen.connect(BusSpeed::Baud250K).await?;
 
@@ -33,7 +33,9 @@ async fn main() -> Result<()> {
     println!("Sent NMT start command");
 
     // Send a test PDO
-    canopen.write_pdo(0x181, vec![0x01, 0x02, 0x03, 0x04]).await?;
+    canopen
+        .write_pdo(0x181, vec![0x01, 0x02, 0x03, 0x04])
+        .await?;
     println!("Sent test PDO");
 
     // Keep running for a few seconds
@@ -43,7 +45,7 @@ async fn main() -> Result<()> {
     // Disconnect
     println!("Disconnecting...");
     canopen.disconnect().await?;
-    
+
     println!("Example completed successfully!");
 
     Ok(())

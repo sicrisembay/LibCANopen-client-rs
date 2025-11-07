@@ -1,8 +1,8 @@
 // Hardware abstraction layer
-use async_trait::async_trait;
-use tokio::sync::mpsc;
 use crate::canopen::message::CanMessage;
 use crate::Result;
+use async_trait::async_trait;
+use tokio::sync::mpsc;
 
 /// Bus speed enumeration
 #[derive(Debug, Clone, Copy)]
@@ -18,16 +18,16 @@ pub enum BusSpeed {
 pub trait CanHardware {
     /// Connect to the CAN hardware with specified bus speed
     async fn connect(&mut self, bus_speed: BusSpeed) -> Result<()>;
-    
+
     /// Disconnect from the CAN hardware
     async fn disconnect(&mut self) -> Result<()>;
-    
+
     /// Send a CAN message
     async fn send_message(&self, message: &CanMessage) -> Result<()>;
-    
+
     /// Subscribe to received messages
     fn subscribe_messages(&self) -> mpsc::Receiver<CanMessage>;
-    
+
     /// Check if the hardware is connected
     fn is_connected(&self) -> bool;
 }
@@ -35,4 +35,4 @@ pub trait CanHardware {
 pub mod peak_can;
 
 // Re-export commonly used types
-pub use peak_can::{PeakCanAdapter, PcanHandle};
+pub use peak_can::{PcanHandle, PeakCanAdapter};

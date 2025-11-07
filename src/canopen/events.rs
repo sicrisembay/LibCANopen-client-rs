@@ -1,7 +1,7 @@
 // Event system for CANopen messages
-use tokio::sync::broadcast;
 use crate::canopen::message::{CanMessage, MessageType};
 use std::time::SystemTime;
+use tokio::sync::broadcast;
 
 #[derive(Debug, Clone)]
 pub struct MessageEvent {

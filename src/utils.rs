@@ -36,8 +36,7 @@ impl ByteArrayExt for [u8] {
     fn to_u64_le(&self) -> Option<u64> {
         if self.len() >= 8 {
             Some(u64::from_le_bytes([
-                self[0], self[1], self[2], self[3],
-                self[4], self[5], self[6], self[7],
+                self[0], self[1], self[2], self[3], self[4], self[5], self[6], self[7],
             ]))
         } else {
             None

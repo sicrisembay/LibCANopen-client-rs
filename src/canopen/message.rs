@@ -1,6 +1,6 @@
 // CAN message types and COB-ID definitions
+use crate::{CANopenError, Result};
 use serde::{Deserialize, Serialize};
-use crate::{Result, CANopenError};
 
 /// CAN identifier wrapper with CANopen-specific functionality
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -148,7 +148,7 @@ impl CanMessage {
     pub fn new(id: u16, data: Vec<u8>) -> Result<Self> {
         let can_id = CanId::new(id)?;
         Self::validate_data_length(&data)?;
-        
+
         Ok(Self {
             id: can_id,
             data,
@@ -173,7 +173,7 @@ impl CanMessage {
         if !remote {
             Self::validate_data_length(&data)?;
         }
-        
+
         Ok(Self {
             id: can_id,
             data,
@@ -187,7 +187,7 @@ impl CanMessage {
         let can_id = CanId::new(id)?;
         let data_vec = data.to_vec();
         Self::validate_data_length(&data_vec)?;
-        
+
         Ok(Self {
             id: can_id,
             data: data_vec,
@@ -218,7 +218,7 @@ impl CanMessage {
     pub fn is_valid(&self) -> bool {
         self.id.is_valid() && self.data.len() <= 8 && self.validate_canopen_format()
     }
-    
+
     /// Check if this is a remote transmission request
     pub fn is_remote_request(&self) -> bool {
         self.remote
@@ -409,7 +409,7 @@ pub enum SdoServerCommand {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EmergencyErrorCode {
     NoError = 0x0000,
-    Generic = 0x0001,  // Generic error
+    Generic = 0x0001, // Generic error
     GenericError = 0x1000,
     Current = 0x2000,
     CurrentInput = 0x2010,
@@ -463,7 +463,8 @@ mod tests {
         assert_eq!(nmt_msg.message_type(), MessageType::Nmt);
 
         // SDO request
-        let sdo_msg = CanMessage::new(0x601, vec![0x40, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00]).unwrap();
+        let sdo_msg =
+            CanMessage::new(0x601, vec![0x40, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00]).unwrap();
         assert_eq!(sdo_msg.message_type(), MessageType::Sdo);
 
         // PDO
@@ -517,7 +518,7 @@ mod tests {
     #[test]
     fn test_can_id_functionality() {
         let can_id = CanId::new(0x183).unwrap();
-        
+
         assert_eq!(can_id.node_id(), Some(3));
         assert_eq!(can_id.pdo_number(), Some(1));
         assert!(can_id.is_pdo_tx());
@@ -535,7 +536,7 @@ mod tests {
     #[test]
     fn test_data_extraction() {
         let msg = CanMessage::new(0x181, vec![0x12, 0x34, 0x56, 0x78]).unwrap();
-        
+
         assert_eq!(msg.get_u8(0), Some(0x12));
         assert_eq!(msg.get_u8(4), None);
         assert_eq!(msg.get_u16_le(0), Some(0x3412));
@@ -555,7 +556,10 @@ mod tests {
         assert_eq!(MessageType::from_cob_id(0x481), MessageType::Pdo);
         assert_eq!(MessageType::from_cob_id(0x581), MessageType::Sdo);
         assert_eq!(MessageType::from_cob_id(0x601), MessageType::Sdo);
-        assert_eq!(MessageType::from_cob_id(0x701), MessageType::NmtErrorControl);
+        assert_eq!(
+            MessageType::from_cob_id(0x701),
+            MessageType::NmtErrorControl
+        );
         assert_eq!(MessageType::from_cob_id(0x7E4), MessageType::Lss);
         assert_eq!(MessageType::from_cob_id(0x7E5), MessageType::Lss);
     }
@@ -706,9 +710,15 @@ mod tests {
         // Test all NMT commands
         assert_eq!(NmtCommand::from_u8(0x01), Some(NmtCommand::StartRemoteNode));
         assert_eq!(NmtCommand::from_u8(0x02), Some(NmtCommand::StopRemoteNode));
-        assert_eq!(NmtCommand::from_u8(0x80), Some(NmtCommand::EnterPreOperational));
+        assert_eq!(
+            NmtCommand::from_u8(0x80),
+            Some(NmtCommand::EnterPreOperational)
+        );
         assert_eq!(NmtCommand::from_u8(0x81), Some(NmtCommand::ResetNode));
-        assert_eq!(NmtCommand::from_u8(0x82), Some(NmtCommand::ResetCommunication));
+        assert_eq!(
+            NmtCommand::from_u8(0x82),
+            Some(NmtCommand::ResetCommunication)
+        );
 
         // Invalid command
         assert_eq!(NmtCommand::from_u8(0xFF), None);
@@ -721,12 +731,11 @@ mod tests {
         assert_eq!(NmtCommand::ResetCommunication.to_u8(), 0x82);
     }
 
-
-
     #[test]
     fn test_data_extraction_edge_cases() {
-        let msg = CanMessage::new(0x181, vec![0xFF, 0x00, 0x80, 0x7F, 0x01, 0x02, 0x03, 0x04]).unwrap();
-        
+        let msg =
+            CanMessage::new(0x181, vec![0xFF, 0x00, 0x80, 0x7F, 0x01, 0x02, 0x03, 0x04]).unwrap();
+
         // u8 extraction
         assert_eq!(msg.get_u8(0), Some(0xFF));
         assert_eq!(msg.get_u8(7), Some(0x04));
@@ -747,7 +756,7 @@ mod tests {
     fn test_message_cloning() {
         let msg1 = CanMessage::new(0x181, vec![0x01, 0x02, 0x03]).unwrap();
         let msg2 = msg1.clone();
-        
+
         assert_eq!(msg1.id, msg2.id);
         assert_eq!(msg1.data, msg2.data);
     }
