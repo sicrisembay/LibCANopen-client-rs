@@ -207,7 +207,9 @@ impl SdoClient {
                         }
                     }
                     (SdoDirection::Upload, SdoState::SegmentTransfer) => {
-                        if command & 0x60 == 0x60 {
+                        // Upload segment response: command byte format is 0x00-0x1F
+                        // Bits: 7-5=000 (upload segment), 4=toggle, 3-1=n (invalid bytes), 0=c (last)
+                        if command & 0xE0 == 0x00 {
                             let toggle = (command & 0x10) != 0;
                             let n = (command >> 1) & 0x07;
                             let c = (command & 0x01) != 0;
