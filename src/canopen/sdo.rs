@@ -256,7 +256,9 @@ impl SdoClient {
                         }
                     }
                     (SdoDirection::Download, SdoState::InitiateSent) => {
-                        if command & 0x60 == 0x60 {
+                        // Download initiate response: command byte format is 0x60-0x7F
+                        // Bits: 7-5=011 (download initiate response)
+                        if command & 0xE0 == 0x60 {
                             // Download initiate response
                             if transfer.transfer_type == SdoTransferType::Expedited {
                                 // Expedited transfer complete
@@ -274,7 +276,9 @@ impl SdoClient {
                         }
                     }
                     (SdoDirection::Download, SdoState::SegmentTransfer) => {
-                        if command & 0x20 == 0x20 {
+                        // Download segment response: command byte format is 0x20-0x3F
+                        // Bits: 7-5=001 (download segment response), 4=toggle
+                        if command & 0xE0 == 0x20 {
                             let toggle = (command & 0x10) != 0;
 
                             if toggle == transfer.toggle_bit {
