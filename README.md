@@ -266,7 +266,6 @@ cargo run --release --example lss_test
 - SRDO (Safety-related data objects)
 - Block SDO transfers (high-speed bulk data)
 - SocketCAN support for Linux
-- EDS/DCF file parsing
 
 
 ## Architecture
