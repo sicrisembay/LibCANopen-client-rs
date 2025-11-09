@@ -361,13 +361,24 @@ impl CANopenSimple {
                     .await
                     {
                         Ok(Some(msg)) => {
-                            log::debug!("Sending SDO request: ID={:03X}", msg.id.raw());
+                            // Check if still running before sending (could have changed during await)
+                            if !*is_running_clone.read().await {
+                                log::debug!("Discarding message during shutdown: ID={:03X}", msg.id.raw());
+                                break;
+                            }
+                            
+                            log::debug!("Sending outgoing message: ID={:03X}", msg.id.raw());
                             if let Err(e) = hw_clone.read().await.send_message(&msg).await {
-                                log::error!("Failed to send CAN message to hardware: {:?}", e);
+                                // During shutdown, connection errors are expected
+                                if *is_running_clone.read().await {
+                                    log::error!("Failed to send CAN message to hardware: {:?}", e);
+                                } else {
+                                    log::debug!("Message send failed during shutdown (expected): {:?}", e);
+                                }
                             }
                         }
                         Ok(None) => {
-                            log::warn!("Outgoing message channel closed");
+                            log::debug!("Outgoing message channel closed");
                             break;
                         }
                         Err(_) => {
