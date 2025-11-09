@@ -138,8 +138,8 @@ impl SdoClient {
                             log::error!("Failed to process CAN message: {}", e);
                         }
                     } else {
-                        // Channel closed, exit
-                        log::error!("SDO message receiver channel closed - exiting SDO client loop");
+                        // Channel closed (normal during disconnect), exit gracefully
+                        log::debug!("SDO message receiver channel closed - exiting SDO client loop");
                         break;
                     }
                 }

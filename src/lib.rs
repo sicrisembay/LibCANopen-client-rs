@@ -429,8 +429,8 @@ impl CANopenSimple {
                         event_manager.emit_message(can_msg);
                     }
                     Ok(None) => {
-                        // Channel closed
-                        log::warn!("Hardware message channel closed");
+                        // Channel closed (normal during disconnect)
+                        log::debug!("Hardware message channel closed");
                         break;
                     }
                     Err(_) => {
