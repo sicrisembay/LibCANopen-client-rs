@@ -775,8 +775,11 @@ impl CANopenSimple {
         )
         .await
         {
-            Ok(Ok(data)) => data,
-            Ok(Err(_)) => Err(CANopenError::ChannelClosed),
+            Ok(result) => {
+                let response = result.map_err(|_| CANopenError::ChannelClosed)?;
+                // response is Result<Vec<u8>>, propagate any SDO errors
+                response
+            }
             Err(_) => Err(CANopenError::Timeout),
         }
     }
@@ -864,7 +867,9 @@ impl CANopenSimple {
         .await
         {
             Ok(result) => {
-                let _response = result.map_err(|_| CANopenError::ChannelClosed)?;
+                let response = result.map_err(|_| CANopenError::ChannelClosed)?;
+                // response is Result<Vec<u8>>, so we need to check if the SDO operation itself succeeded
+                response?;
                 Ok(())
             }
             Err(_) => Err(CANopenError::Timeout),

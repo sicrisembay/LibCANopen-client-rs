@@ -193,24 +193,37 @@ for emcy in recent {
 
 ### LSS (Layer Setting Services)
 
-Node configuration and commissioning with individual inquiry commands for efficient CAN bus usage:
+Node configuration and commissioning with support for discovering multiple devices:
 
 ```rust
 // Switch to configuration mode (all unconfigured slaves)
 canopen.lss_switch_state_global(LssMode::Configuration).await?;
 
-// Inquire individual LSS identity fields (each sends only one CAN message)
+// Single device inquiry (backward compatible - returns first response)
 let vendor_id = canopen.lss_inquire_vendor_id(1000).await?;
 let product_code = canopen.lss_inquire_product_code(1000).await?;
 let revision = canopen.lss_inquire_revision_number(1000).await?;
 let serial = canopen.lss_inquire_serial_number(1000).await?;
 println!("Vendor ID: 0x{:08X}", vendor_id);
-println!("Product Code: 0x{:08X}", product_code);
-println!("Revision: 0x{:08X}", revision);
-println!("Serial Number: 0x{:08X}", serial);
+
+// Network discovery - collect responses from ALL unconfigured devices
+let vendor_ids = canopen.lss_inquire_vendor_ids(2000).await?;
+let product_codes = canopen.lss_inquire_product_codes(2000).await?;
+let serial_numbers = canopen.lss_inquire_serial_numbers(2000).await?;
+let node_ids = canopen.lss_inquire_node_ids(2000).await?;
+
+println!("Discovered {} device(s):", vendor_ids.len());
+for (i, serial) in serial_numbers.iter().enumerate() {
+    println!("  Device {}: Serial 0x{:08X}", i + 1, serial);
+}
 
 // Select specific slave
-let address = LssAddress { vendor_id, product_code, revision_number: revision, serial_number: serial };
+let address = LssAddress { 
+    vendor_id, 
+    product_code, 
+    revision_number: revision, 
+    serial_number: serial 
+};
 canopen.lss_switch_state_selective(&address).await?;
 
 // Configure node-ID (example - disabled by default for safety)
@@ -231,18 +244,20 @@ canopen.lss_switch_state_global(LssMode::Operation).await?;
 Comprehensive examples are provided in the `examples/` directory:
 
 - **`sdo_test.rs`** - SDO read/write operations with various data types
+- **`sdo_timeout_test.rs`** - SDO error handling and timeout behavior
 - **`nmt_test.rs`** - NMT state control and heartbeat monitoring
 - **`pdo_test.rs`** - PDO transmission and reception with callbacks
 - **`sync_test.rs`** - SYNC message handling and high-frequency testing
 - **`emcy_test.rs`** - Emergency message monitoring and parsing
 - **`lss_test.rs`** - LSS commissioning workflow (10 test sections)
+- **`lss_multi_response_test.rs`** - LSS network discovery with multiple devices
 
 Run an example:
 
 ```bash
 cargo run --release --example sdo_test
 cargo run --release --example pdo_test
-cargo run --release --example lss_test
+cargo run --release --example lss_multi_response_test
 ```
 
 ## Project Status
