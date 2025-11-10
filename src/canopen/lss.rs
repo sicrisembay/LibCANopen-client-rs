@@ -156,8 +156,8 @@ pub struct LssManager {
     /// Outgoing message channel
     message_tx: mpsc::Sender<CanMessage>,
 
-    /// Pending requests
-    pending_requests: Arc<RwLock<HashMap<u8, oneshot::Sender<Result<LssResponse>>>>>,
+    /// Pending requests (mpsc for multiple responses support)
+    pending_requests: Arc<RwLock<HashMap<u8, mpsc::Sender<Result<LssResponse>>>>>,
 
     /// Request queue
     request_tx: mpsc::Sender<LssRequest>,
@@ -197,22 +197,36 @@ impl LssManager {
                     continue;
                 }
 
+                // Create mpsc channel for potentially multiple responses
+                let (mpsc_tx, mut mpsc_rx) = mpsc::channel(1);
+
                 // Store pending request
                 if !request.command.is_empty() {
                     let cs = request.command[0];
-                    pending.write().await.insert(cs, request.response_tx);
+                    pending.write().await.insert(cs, mpsc_tx);
 
-                    // Set up timeout
+                    // Forward first response to oneshot sender and clean up
                     let pending_clone = Arc::clone(&pending);
+                    let response_tx = request.response_tx;
                     let timeout_ms = request.timeout_ms;
-                    tokio::spawn(async move {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(timeout_ms as u64))
-                            .await;
 
-                        // Remove and notify timeout if still pending
-                        if let Some(tx) = pending_clone.write().await.remove(&cs) {
-                            let _ = tx.send(Err(CANopenError::Timeout));
+                    tokio::spawn(async move {
+                        match tokio::time::timeout(
+                            tokio::time::Duration::from_millis(timeout_ms as u64),
+                            mpsc_rx.recv(),
+                        )
+                        .await
+                        {
+                            Ok(Some(response)) => {
+                                let _ = response_tx.send(response);
+                            }
+                            Ok(None) | Err(_) => {
+                                let _ = response_tx.send(Err(CANopenError::Timeout));
+                            }
                         }
+
+                        // Clean up pending request
+                        pending_clone.write().await.remove(&cs);
                     });
                 }
             }
@@ -227,15 +241,16 @@ impl LssManager {
 
         let cs = data[0];
 
-        // Find pending request
+        // Find pending request (don't remove, as we may need to handle multiple responses)
         let response_tx = {
-            let mut pending = self.pending_requests.write().await;
-            pending.remove(&cs)
+            let pending = self.pending_requests.read().await;
+            pending.get(&cs).cloned()
         };
 
         if let Some(tx) = response_tx {
             let response = Self::parse_response(data);
-            let _ = tx.send(response);
+            // Send to channel (may fail if receiver dropped, which is OK)
+            let _ = tx.send(response).await;
         } else {
             trace!(
                 "Received LSS response with no pending request: CS=0x{:02X}",
@@ -503,101 +518,298 @@ impl LssManager {
         }
     }
 
-    /// Inquire vendor ID only
+    /// Inquire vendor IDs from all LSS slaves in configuration mode
     ///
-    /// Sends LSS inquiry command 0x5A to query only the vendor ID field.
-    pub async fn inquire_vendor_id(&self, timeout_ms: u32) -> Result<u32> {
-        let response = self
-            .send_command(
-                vec![LssCommand::InquireVendorId as u8, 0, 0, 0, 0, 0, 0, 0],
-                timeout_ms,
-            )
-            .await?;
+    /// Sends LSS inquiry command 0x5A once and collects all responses within timeout.
+    /// Returns Vec of all unique vendor IDs received.
+    ///
+    /// Note: This is a broadcast command. In global configuration mode, multiple
+    /// slaves can respond. Use switch_state_selective() first to query a specific slave.
+    pub async fn inquire_vendor_ids(&self, timeout_ms: u32) -> Result<Vec<u32>> {
+        let command = vec![LssCommand::InquireVendorId as u8, 0, 0, 0, 0, 0, 0, 0];
+        let cs = command[0];
 
-        match response {
-            LssResponse::InquireVendorId(vendor_id) => {
-                debug!("LSS: Vendor ID: 0x{:08X}", vendor_id);
-                Ok(vendor_id)
+        // Send command once
+        let lss_msg = CanMessage::new(LSS_MASTER_TX, command)
+            .expect("LSS message creation should never fail");
+        self.message_tx
+            .send(lss_msg)
+            .await
+            .map_err(|_| CANopenError::ChannelClosed)?;
+
+        // Collect responses
+        let (response_tx, mut response_rx) = mpsc::channel(100);
+        self.pending_requests.write().await.insert(cs, response_tx);
+
+        let mut vendor_ids = Vec::new();
+        let start_time = tokio::time::Instant::now();
+        let timeout_duration = tokio::time::Duration::from_millis(timeout_ms as u64);
+
+        while start_time.elapsed() < timeout_duration {
+            let remaining_time = timeout_duration - start_time.elapsed();
+            match tokio::time::timeout(remaining_time, response_rx.recv()).await {
+                Ok(Some(result)) => match result {
+                    Ok(LssResponse::InquireVendorId(vendor_id)) => {
+                        if !vendor_ids.contains(&vendor_id) {
+                            debug!("LSS: Vendor ID: 0x{:08X}", vendor_id);
+                            vendor_ids.push(vendor_id);
+                        }
+                        // Re-register to catch more responses
+                        let (new_tx, new_rx) = mpsc::channel(100);
+                        self.pending_requests.write().await.insert(cs, new_tx);
+                        response_rx = new_rx;
+                    }
+                    Ok(_) => continue,
+                    Err(_) => break,
+                },
+                Ok(None) => break,
+                Err(_) => break, // Timeout
             }
-            _ => Err(CANopenError::InvalidMessage),
+        }
+
+        // Clean up
+        self.pending_requests.write().await.remove(&cs);
+
+        if vendor_ids.is_empty() {
+            Err(CANopenError::Timeout)
+        } else {
+            Ok(vendor_ids)
         }
     }
 
-    /// Inquire product code only
+    /// Inquire product codes from all LSS slaves in configuration mode
     ///
-    /// Sends LSS inquiry command 0x5B to query only the product code field.
-    pub async fn inquire_product_code(&self, timeout_ms: u32) -> Result<u32> {
-        let response = self
-            .send_command(
-                vec![LssCommand::InquireProductCode as u8, 0, 0, 0, 0, 0, 0, 0],
-                timeout_ms,
-            )
-            .await?;
+    /// Sends LSS inquiry command 0x5B once and collects all responses within timeout.
+    /// Returns Vec of all unique product codes received.
+    ///
+    /// Note: This is a broadcast command. In global configuration mode, multiple
+    /// slaves can respond. Use switch_state_selective() first to query a specific slave.
+    pub async fn inquire_product_codes(&self, timeout_ms: u32) -> Result<Vec<u32>> {
+        let command = vec![LssCommand::InquireProductCode as u8, 0, 0, 0, 0, 0, 0, 0];
+        let cs = command[0];
 
-        match response {
-            LssResponse::InquireProductCode(product_code) => {
-                debug!("LSS: Product Code: 0x{:08X}", product_code);
-                Ok(product_code)
+        // Send command once
+        let lss_msg = CanMessage::new(LSS_MASTER_TX, command)
+            .expect("LSS message creation should never fail");
+        self.message_tx
+            .send(lss_msg)
+            .await
+            .map_err(|_| CANopenError::ChannelClosed)?;
+
+        // Collect responses
+        let (response_tx, mut response_rx) = mpsc::channel(100);
+        self.pending_requests.write().await.insert(cs, response_tx);
+
+        let mut product_codes = Vec::new();
+        let start_time = tokio::time::Instant::now();
+        let timeout_duration = tokio::time::Duration::from_millis(timeout_ms as u64);
+
+        while start_time.elapsed() < timeout_duration {
+            let remaining_time = timeout_duration - start_time.elapsed();
+            match tokio::time::timeout(remaining_time, response_rx.recv()).await {
+                Ok(Some(result)) => match result {
+                    Ok(LssResponse::InquireProductCode(product_code)) => {
+                        if !product_codes.contains(&product_code) {
+                            debug!("LSS: Product Code: 0x{:08X}", product_code);
+                            product_codes.push(product_code);
+                        }
+                        // Re-register to catch more responses
+                        let (new_tx, new_rx) = mpsc::channel(100);
+                        self.pending_requests.write().await.insert(cs, new_tx);
+                        response_rx = new_rx;
+                    }
+                    Ok(_) => continue,
+                    Err(_) => break,
+                },
+                Ok(None) => break,
+                Err(_) => break, // Timeout
             }
-            _ => Err(CANopenError::InvalidMessage),
+        }
+
+        // Clean up
+        self.pending_requests.write().await.remove(&cs);
+
+        if product_codes.is_empty() {
+            Err(CANopenError::Timeout)
+        } else {
+            Ok(product_codes)
         }
     }
 
-    /// Inquire revision number only
+    /// Inquire revision numbers from all LSS slaves in configuration mode
     ///
-    /// Sends LSS inquiry command 0x5C to query only the revision number field.
-    pub async fn inquire_revision_number(&self, timeout_ms: u32) -> Result<u32> {
-        let response = self
-            .send_command(
-                vec![LssCommand::InquireRevisionNumber as u8, 0, 0, 0, 0, 0, 0, 0],
-                timeout_ms,
-            )
-            .await?;
+    /// Sends LSS inquiry command 0x5C once and collects all responses within timeout.
+    /// Returns Vec of all unique revision numbers received.
+    ///
+    /// Note: This is a broadcast command. In global configuration mode, multiple
+    /// slaves can respond. Use switch_state_selective() first to query a specific slave.
+    pub async fn inquire_revision_numbers(&self, timeout_ms: u32) -> Result<Vec<u32>> {
+        let command = vec![LssCommand::InquireRevisionNumber as u8, 0, 0, 0, 0, 0, 0, 0];
+        let cs = command[0];
 
-        match response {
-            LssResponse::InquireRevisionNumber(revision_number) => {
-                debug!("LSS: Revision Number: 0x{:08X}", revision_number);
-                Ok(revision_number)
+        // Send command once
+        let lss_msg = CanMessage::new(LSS_MASTER_TX, command)
+            .expect("LSS message creation should never fail");
+        self.message_tx
+            .send(lss_msg)
+            .await
+            .map_err(|_| CANopenError::ChannelClosed)?;
+
+        // Collect responses
+        let (response_tx, mut response_rx) = mpsc::channel(100);
+        self.pending_requests.write().await.insert(cs, response_tx);
+
+        let mut revision_numbers = Vec::new();
+        let start_time = tokio::time::Instant::now();
+        let timeout_duration = tokio::time::Duration::from_millis(timeout_ms as u64);
+
+        while start_time.elapsed() < timeout_duration {
+            let remaining_time = timeout_duration - start_time.elapsed();
+            match tokio::time::timeout(remaining_time, response_rx.recv()).await {
+                Ok(Some(result)) => match result {
+                    Ok(LssResponse::InquireRevisionNumber(revision_number)) => {
+                        if !revision_numbers.contains(&revision_number) {
+                            debug!("LSS: Revision Number: 0x{:08X}", revision_number);
+                            revision_numbers.push(revision_number);
+                        }
+                        // Re-register to catch more responses
+                        let (new_tx, new_rx) = mpsc::channel(100);
+                        self.pending_requests.write().await.insert(cs, new_tx);
+                        response_rx = new_rx;
+                    }
+                    Ok(_) => continue,
+                    Err(_) => break,
+                },
+                Ok(None) => break,
+                Err(_) => break, // Timeout
             }
-            _ => Err(CANopenError::InvalidMessage),
+        }
+
+        // Clean up
+        self.pending_requests.write().await.remove(&cs);
+
+        if revision_numbers.is_empty() {
+            Err(CANopenError::Timeout)
+        } else {
+            Ok(revision_numbers)
         }
     }
 
-    /// Inquire serial number only
+    /// Inquire serial numbers from all LSS slaves in configuration mode
     ///
-    /// Sends LSS inquiry command 0x5D to query only the serial number field.
-    pub async fn inquire_serial_number(&self, timeout_ms: u32) -> Result<u32> {
-        let response = self
-            .send_command(
-                vec![LssCommand::InquireSerialNumber as u8, 0, 0, 0, 0, 0, 0, 0],
-                timeout_ms,
-            )
-            .await?;
+    /// Sends LSS inquiry command 0x5D once and collects all responses within timeout.
+    /// Returns Vec of all unique serial numbers received.
+    ///
+    /// Note: This is a broadcast command. In global configuration mode, multiple
+    /// slaves can respond. Use switch_state_selective() first to query a specific slave.
+    pub async fn inquire_serial_numbers(&self, timeout_ms: u32) -> Result<Vec<u32>> {
+        let command = vec![LssCommand::InquireSerialNumber as u8, 0, 0, 0, 0, 0, 0, 0];
+        let cs = command[0];
 
-        match response {
-            LssResponse::InquireSerialNumber(serial_number) => {
-                debug!("LSS: Serial Number: 0x{:08X}", serial_number);
-                Ok(serial_number)
+        // Send command once
+        let lss_msg = CanMessage::new(LSS_MASTER_TX, command)
+            .expect("LSS message creation should never fail");
+        self.message_tx
+            .send(lss_msg)
+            .await
+            .map_err(|_| CANopenError::ChannelClosed)?;
+
+        // Collect responses
+        let (response_tx, mut response_rx) = mpsc::channel(100);
+        self.pending_requests.write().await.insert(cs, response_tx);
+
+        let mut serial_numbers = Vec::new();
+        let start_time = tokio::time::Instant::now();
+        let timeout_duration = tokio::time::Duration::from_millis(timeout_ms as u64);
+
+        while start_time.elapsed() < timeout_duration {
+            let remaining_time = timeout_duration - start_time.elapsed();
+            match tokio::time::timeout(remaining_time, response_rx.recv()).await {
+                Ok(Some(result)) => match result {
+                    Ok(LssResponse::InquireSerialNumber(serial_number)) => {
+                        if !serial_numbers.contains(&serial_number) {
+                            debug!("LSS: Serial Number: 0x{:08X}", serial_number);
+                            serial_numbers.push(serial_number);
+                        }
+                        // Re-register to catch more responses
+                        let (new_tx, new_rx) = mpsc::channel(100);
+                        self.pending_requests.write().await.insert(cs, new_tx);
+                        response_rx = new_rx;
+                    }
+                    Ok(_) => continue,
+                    Err(_) => break,
+                },
+                Ok(None) => break,
+                Err(_) => break, // Timeout
             }
-            _ => Err(CANopenError::InvalidMessage),
+        }
+
+        // Clean up
+        self.pending_requests.write().await.remove(&cs);
+
+        if serial_numbers.is_empty() {
+            Err(CANopenError::Timeout)
+        } else {
+            Ok(serial_numbers)
         }
     }
 
-    /// Inquire current node-ID
-    pub async fn inquire_node_id(&self, timeout_ms: u32) -> Result<u8> {
-        let response = self
-            .send_command(
-                vec![LssCommand::InquireNodeId as u8, 0, 0, 0, 0, 0, 0, 0],
-                timeout_ms,
-            )
-            .await?;
+    /// Inquire node IDs from all LSS slaves in configuration mode
+    ///
+    /// Sends LSS inquiry command 0x5E once and collects all responses within timeout.
+    /// Returns Vec of all unique node IDs received.
+    ///
+    /// Note: This is a broadcast command. In global configuration mode, multiple
+    /// slaves can respond. Use switch_state_selective() first to query a specific slave.
+    pub async fn inquire_node_ids(&self, timeout_ms: u32) -> Result<Vec<u8>> {
+        let command = vec![LssCommand::InquireNodeId as u8, 0, 0, 0, 0, 0, 0, 0];
+        let cs = command[0];
 
-        match response {
-            LssResponse::InquireNodeId(node_id) => {
-                debug!("LSS: Current node-ID: {}", node_id);
-                Ok(node_id)
+        // Send command once
+        let lss_msg = CanMessage::new(LSS_MASTER_TX, command)
+            .expect("LSS message creation should never fail");
+        self.message_tx
+            .send(lss_msg)
+            .await
+            .map_err(|_| CANopenError::ChannelClosed)?;
+
+        // Collect responses
+        let (response_tx, mut response_rx) = mpsc::channel(100);
+        self.pending_requests.write().await.insert(cs, response_tx);
+
+        let mut node_ids = Vec::new();
+        let start_time = tokio::time::Instant::now();
+        let timeout_duration = tokio::time::Duration::from_millis(timeout_ms as u64);
+
+        while start_time.elapsed() < timeout_duration {
+            let remaining_time = timeout_duration - start_time.elapsed();
+            match tokio::time::timeout(remaining_time, response_rx.recv()).await {
+                Ok(Some(result)) => match result {
+                    Ok(LssResponse::InquireNodeId(node_id)) => {
+                        if !node_ids.contains(&node_id) {
+                            debug!("LSS: Node ID: {}", node_id);
+                            node_ids.push(node_id);
+                        }
+                        // Re-register to catch more responses
+                        let (new_tx, new_rx) = mpsc::channel(100);
+                        self.pending_requests.write().await.insert(cs, new_tx);
+                        response_rx = new_rx;
+                    }
+                    Ok(_) => continue,
+                    Err(_) => break,
+                },
+                Ok(None) => break,
+                Err(_) => break, // Timeout
             }
-            _ => Err(CANopenError::InvalidMessage),
+        }
+
+        // Clean up
+        self.pending_requests.write().await.remove(&cs);
+
+        if node_ids.is_empty() {
+            Err(CANopenError::Timeout)
+        } else {
+            Ok(node_ids)
         }
     }
 

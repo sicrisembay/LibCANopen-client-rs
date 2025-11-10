@@ -1171,7 +1171,38 @@ impl CANopenSimple {
     pub async fn lss_inquire_vendor_id(&self, timeout_ms: u32) -> Result<u32> {
         let lss_lock = self.lss_manager.read().await;
         if let Some(lss) = lss_lock.as_ref() {
-            lss.inquire_vendor_id(timeout_ms).await
+            let results = lss.inquire_vendor_ids(timeout_ms).await?;
+            results.first().copied().ok_or(CANopenError::Timeout)
+        } else {
+            Err(CANopenError::NotInitialized)
+        }
+    }
+
+    /// Inquire vendor IDs from all LSS slaves in configuration mode
+    ///
+    /// Queries vendor ID field (LSS command 0x5A) and collects all responses.
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds to collect responses
+    ///
+    /// # Returns
+    /// Vec of all unique vendor IDs received within timeout
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use libcanopen_client::*;
+    /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
+    /// let vendor_ids = canopen.lss_inquire_vendor_ids(1000).await?;
+    /// for id in vendor_ids {
+    ///     println!("Vendor ID: 0x{:08X}", id);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn lss_inquire_vendor_ids(&self, timeout_ms: u32) -> Result<Vec<u32>> {
+        let lss_lock = self.lss_manager.read().await;
+        if let Some(lss) = lss_lock.as_ref() {
+            lss.inquire_vendor_ids(timeout_ms).await
         } else {
             Err(CANopenError::NotInitialized)
         }
@@ -1196,7 +1227,26 @@ impl CANopenSimple {
     pub async fn lss_inquire_product_code(&self, timeout_ms: u32) -> Result<u32> {
         let lss_lock = self.lss_manager.read().await;
         if let Some(lss) = lss_lock.as_ref() {
-            lss.inquire_product_code(timeout_ms).await
+            let results = lss.inquire_product_codes(timeout_ms).await?;
+            results.first().copied().ok_or(CANopenError::Timeout)
+        } else {
+            Err(CANopenError::NotInitialized)
+        }
+    }
+
+    /// Inquire product codes from all LSS slaves in configuration mode
+    ///
+    /// Queries product code field (LSS command 0x5B) and collects all responses.
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds to collect responses
+    ///
+    /// # Returns
+    /// Vec of all unique product codes received within timeout
+    pub async fn lss_inquire_product_codes(&self, timeout_ms: u32) -> Result<Vec<u32>> {
+        let lss_lock = self.lss_manager.read().await;
+        if let Some(lss) = lss_lock.as_ref() {
+            lss.inquire_product_codes(timeout_ms).await
         } else {
             Err(CANopenError::NotInitialized)
         }
@@ -1221,7 +1271,26 @@ impl CANopenSimple {
     pub async fn lss_inquire_revision_number(&self, timeout_ms: u32) -> Result<u32> {
         let lss_lock = self.lss_manager.read().await;
         if let Some(lss) = lss_lock.as_ref() {
-            lss.inquire_revision_number(timeout_ms).await
+            let results = lss.inquire_revision_numbers(timeout_ms).await?;
+            results.first().copied().ok_or(CANopenError::Timeout)
+        } else {
+            Err(CANopenError::NotInitialized)
+        }
+    }
+
+    /// Inquire revision numbers from all LSS slaves in configuration mode
+    ///
+    /// Queries revision number field (LSS command 0x5C) and collects all responses.
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds to collect responses
+    ///
+    /// # Returns
+    /// Vec of all unique revision numbers received within timeout
+    pub async fn lss_inquire_revision_numbers(&self, timeout_ms: u32) -> Result<Vec<u32>> {
+        let lss_lock = self.lss_manager.read().await;
+        if let Some(lss) = lss_lock.as_ref() {
+            lss.inquire_revision_numbers(timeout_ms).await
         } else {
             Err(CANopenError::NotInitialized)
         }
@@ -1246,7 +1315,26 @@ impl CANopenSimple {
     pub async fn lss_inquire_serial_number(&self, timeout_ms: u32) -> Result<u32> {
         let lss_lock = self.lss_manager.read().await;
         if let Some(lss) = lss_lock.as_ref() {
-            lss.inquire_serial_number(timeout_ms).await
+            let results = lss.inquire_serial_numbers(timeout_ms).await?;
+            results.first().copied().ok_or(CANopenError::Timeout)
+        } else {
+            Err(CANopenError::NotInitialized)
+        }
+    }
+
+    /// Inquire serial numbers from all LSS slaves in configuration mode
+    ///
+    /// Queries serial number field (LSS command 0x5D) and collects all responses.
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds to collect responses
+    ///
+    /// # Returns
+    /// Vec of all unique serial numbers received within timeout
+    pub async fn lss_inquire_serial_numbers(&self, timeout_ms: u32) -> Result<Vec<u32>> {
+        let lss_lock = self.lss_manager.read().await;
+        if let Some(lss) = lss_lock.as_ref() {
+            lss.inquire_serial_numbers(timeout_ms).await
         } else {
             Err(CANopenError::NotInitialized)
         }
@@ -1256,7 +1344,26 @@ impl CANopenSimple {
     pub async fn lss_inquire_node_id(&self, timeout_ms: u32) -> Result<u8> {
         let lss_lock = self.lss_manager.read().await;
         if let Some(lss) = lss_lock.as_ref() {
-            lss.inquire_node_id(timeout_ms).await
+            let results = lss.inquire_node_ids(timeout_ms).await?;
+            results.first().copied().ok_or(CANopenError::Timeout)
+        } else {
+            Err(CANopenError::NotInitialized)
+        }
+    }
+
+    /// Inquire node IDs from all LSS slaves in configuration mode
+    ///
+    /// Queries node ID field (LSS command 0x5E) and collects all responses.
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds to collect responses
+    ///
+    /// # Returns
+    /// Vec of all unique node IDs received within timeout
+    pub async fn lss_inquire_node_ids(&self, timeout_ms: u32) -> Result<Vec<u8>> {
+        let lss_lock = self.lss_manager.read().await;
+        if let Some(lss) = lss_lock.as_ref() {
+            lss.inquire_node_ids(timeout_ms).await
         } else {
             Err(CANopenError::NotInitialized)
         }
