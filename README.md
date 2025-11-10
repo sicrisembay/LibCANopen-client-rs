@@ -193,19 +193,24 @@ for emcy in recent {
 
 ### LSS (Layer Setting Services)
 
-Node configuration and commissioning:
+Node configuration and commissioning with individual inquiry commands for efficient CAN bus usage:
 
 ```rust
 // Switch to configuration mode (all unconfigured slaves)
 canopen.lss_switch_state_global(LssMode::Configuration).await?;
 
-// Inquire LSS address
-let address = canopen.lss_inquire_lss_address(1000).await?;
-println!("Vendor ID: 0x{:08X}", address.vendor_id);
-println!("Product Code: 0x{:08X}", address.product_code);
-println!("Serial Number: 0x{:08X}", address.serial_number);
+// Inquire individual LSS identity fields (each sends only one CAN message)
+let vendor_id = canopen.lss_inquire_vendor_id(1000).await?;
+let product_code = canopen.lss_inquire_product_code(1000).await?;
+let revision = canopen.lss_inquire_revision_number(1000).await?;
+let serial = canopen.lss_inquire_serial_number(1000).await?;
+println!("Vendor ID: 0x{:08X}", vendor_id);
+println!("Product Code: 0x{:08X}", product_code);
+println!("Revision: 0x{:08X}", revision);
+println!("Serial Number: 0x{:08X}", serial);
 
 // Select specific slave
+let address = LssAddress { vendor_id, product_code, revision_number: revision, serial_number: serial };
 canopen.lss_switch_state_selective(&address).await?;
 
 // Configure node-ID (example - disabled by default for safety)
@@ -217,8 +222,8 @@ match canopen.lss_configure_node_id(10, 1000).await? {
 // Store configuration to non-volatile memory
 canopen.lss_store_configuration(1000).await?;
 
-// Switch back to waiting mode
-canopen.lss_switch_state_global(LssMode::Waiting).await?;
+// Switch back to operation mode
+canopen.lss_switch_state_global(LssMode::Operation).await?;
 ```
 
 ## Examples

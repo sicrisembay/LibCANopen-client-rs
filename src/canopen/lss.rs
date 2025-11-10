@@ -102,10 +102,10 @@ impl LssError {
     }
 }
 
-/// LSS State
+/// LSS State (CiA-305)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LssMode {
-    Waiting = 0,
+    Operation = 0,
     Configuration = 1,
 }
 
@@ -502,65 +502,84 @@ impl LssManager {
         }
     }
 
-    /// Inquire LSS address (vendor ID, product code, etc.)
-    pub async fn inquire_lss_address(&self, timeout_ms: u32) -> Result<LssAddress> {
-        // Inquire vendor ID
-        let vendor_id = match self
+    /// Inquire vendor ID only
+    ///
+    /// Sends LSS inquiry command 0x5A to query only the vendor ID field.
+    pub async fn inquire_vendor_id(&self, timeout_ms: u32) -> Result<u32> {
+        let response = self
             .send_command(
                 vec![LssCommand::InquireVendorId as u8, 0, 0, 0, 0, 0, 0, 0],
                 timeout_ms,
             )
-            .await?
-        {
-            LssResponse::InquireVendorId(v) => v,
-            _ => return Err(CANopenError::InvalidMessage),
-        };
+            .await?;
 
-        // Inquire product code
-        let product_code = match self
+        match response {
+            LssResponse::InquireVendorId(vendor_id) => {
+                debug!("LSS: Vendor ID: 0x{:08X}", vendor_id);
+                Ok(vendor_id)
+            }
+            _ => Err(CANopenError::InvalidMessage),
+        }
+    }
+
+    /// Inquire product code only
+    ///
+    /// Sends LSS inquiry command 0x5B to query only the product code field.
+    pub async fn inquire_product_code(&self, timeout_ms: u32) -> Result<u32> {
+        let response = self
             .send_command(
                 vec![LssCommand::InquireProductCode as u8, 0, 0, 0, 0, 0, 0, 0],
                 timeout_ms,
             )
-            .await?
-        {
-            LssResponse::InquireProductCode(v) => v,
-            _ => return Err(CANopenError::InvalidMessage),
-        };
+            .await?;
 
-        // Inquire revision number
-        let revision_number = match self
+        match response {
+            LssResponse::InquireProductCode(product_code) => {
+                debug!("LSS: Product Code: 0x{:08X}", product_code);
+                Ok(product_code)
+            }
+            _ => Err(CANopenError::InvalidMessage),
+        }
+    }
+
+    /// Inquire revision number only
+    ///
+    /// Sends LSS inquiry command 0x5C to query only the revision number field.
+    pub async fn inquire_revision_number(&self, timeout_ms: u32) -> Result<u32> {
+        let response = self
             .send_command(
                 vec![LssCommand::InquireRevisionNumber as u8, 0, 0, 0, 0, 0, 0, 0],
                 timeout_ms,
             )
-            .await?
-        {
-            LssResponse::InquireRevisionNumber(v) => v,
-            _ => return Err(CANopenError::InvalidMessage),
-        };
+            .await?;
 
-        // Inquire serial number
-        let serial_number = match self
+        match response {
+            LssResponse::InquireRevisionNumber(revision_number) => {
+                debug!("LSS: Revision Number: 0x{:08X}", revision_number);
+                Ok(revision_number)
+            }
+            _ => Err(CANopenError::InvalidMessage),
+        }
+    }
+
+    /// Inquire serial number only
+    ///
+    /// Sends LSS inquiry command 0x5D to query only the serial number field.
+    pub async fn inquire_serial_number(&self, timeout_ms: u32) -> Result<u32> {
+        let response = self
             .send_command(
                 vec![LssCommand::InquireSerialNumber as u8, 0, 0, 0, 0, 0, 0, 0],
                 timeout_ms,
             )
-            .await?
-        {
-            LssResponse::InquireSerialNumber(v) => v,
-            _ => return Err(CANopenError::InvalidMessage),
-        };
+            .await?;
 
-        let address = LssAddress {
-            vendor_id,
-            product_code,
-            revision_number,
-            serial_number,
-        };
-
-        debug!("LSS: Inquired address: {:?}", address);
-        Ok(address)
+        match response {
+            LssResponse::InquireSerialNumber(serial_number) => {
+                debug!("LSS: Serial Number: 0x{:08X}", serial_number);
+                Ok(serial_number)
+            }
+            _ => Err(CANopenError::InvalidMessage),
+        }
     }
 
     /// Inquire current node-ID

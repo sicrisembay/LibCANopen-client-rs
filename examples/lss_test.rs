@@ -43,29 +43,30 @@ async fn main() -> Result<()> {
 
     println!();
 
-    // Test 2: Inquire LSS address (for demonstration, may timeout if no unconfigured slave)
-    println!("2. LSS Address Inquiry Test");
-    println!("============================");
-    println!("Attempting to inquire LSS address from slave in configuration mode...");
+    // Test 2: Inquire LSS identity fields (for demonstration, may timeout if no unconfigured slave)
+    println!("2. LSS Identity Inquiry Test");
+    println!("=============================");
+    println!("Attempting to inquire LSS identity from slave in configuration mode...");
+    println!("(Each field is queried individually for efficient CAN bus usage)");
+    println!();
 
-    match canopen.lss_inquire_address(1000).await {
-        Ok(address) => {
-            println!("✓ LSS Address received:");
-            println!("  Vendor ID:       0x{:08X}", address.vendor_id);
-            println!("  Product Code:    0x{:08X}", address.product_code);
-            println!("  Revision Number: 0x{:08X}", address.revision_number);
-            println!("  Serial Number:   0x{:08X}", address.serial_number);
+    // Try to query individual fields
+    let vendor_id_result = canopen.lss_inquire_vendor_id(1000).await;
+    let product_code_result = canopen.lss_inquire_product_code(1000).await;
+    let revision_result = canopen.lss_inquire_revision_number(1000).await;
+    let serial_result = canopen.lss_inquire_serial_number(1000).await;
 
-            // Store for later use
-            println!("\n  This address can be used for selective mode");
-        }
-        Err(CANopenError::Timeout) => {
-            println!("⚠ Timeout - no unconfigured slave responded");
-            println!("  (This is normal if all slaves are configured)");
-        }
-        Err(e) => {
-            println!("⚠ Error: {:?}", e);
-        }
+    if let (Ok(vendor_id), Ok(product_code), Ok(revision), Ok(serial)) = 
+        (vendor_id_result, product_code_result, revision_result, serial_result) {
+        println!("✓ LSS Identity received:");
+        println!("  Vendor ID:       0x{:08X}", vendor_id);
+        println!("  Product Code:    0x{:08X}", product_code);
+        println!("  Revision Number: 0x{:08X}", revision);
+        println!("  Serial Number:   0x{:08X}", serial);
+        println!("\n  This identity can be used for selective mode");
+    } else {
+        println!("⚠ Timeout - no unconfigured slave responded");
+        println!("  (This is normal if all slaves are configured)");
     }
 
     println!("\nWaiting 500ms before next test...");
@@ -73,11 +74,11 @@ async fn main() -> Result<()> {
 
     println!();
 
-    // Test 3: Switch back to waiting mode
-    println!("3. Switch to Waiting Mode");
-    println!("=========================");
-    canopen.lss_switch_state_global(LssMode::Waiting).await?;
-    println!("✓ Switched back to waiting mode");
+    // Test 3: Switch back to operation mode
+    println!("3. Switch to Operation Mode");
+    println!("===========================");
+    canopen.lss_switch_state_global(LssMode::Operation).await?;
+    println!("✓ Switched back to operation mode");
     println!();
 
     // Test 4: Selective mode (example with known address)
@@ -260,8 +261,8 @@ async fn main() -> Result<()> {
     println!("5. Store configuration");
     println!("   → lss_store_configuration(timeout)");
     println!();
-    println!("6. Switch back to waiting mode");
-    println!("   → lss_switch_state_global(LssMode::Waiting)");
+    println!("6. Switch back to operation mode");
+    println!("   → lss_switch_state_global(LssMode::Operation)");
     println!();
 
     // Test 10: LSS Error codes demonstration
@@ -277,8 +278,8 @@ async fn main() -> Result<()> {
 
     println!("Cleaning up...");
 
-    // Make sure we're back in waiting mode
-    canopen.lss_switch_state_global(LssMode::Waiting).await?;
+    // Make sure we're back in operation mode
+    canopen.lss_switch_state_global(LssMode::Operation).await?;
 
     // Disconnect
     canopen.disconnect().await?;

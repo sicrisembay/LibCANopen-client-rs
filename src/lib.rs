@@ -159,8 +159,11 @@
 //! // Enter configuration mode
 //! canopen.lss_switch_state_global(LssMode::Configuration).await?;
 //!
-//! // Read LSS address
-//! let address = canopen.lss_inquire_address(1000).await?;
+//! // Query individual LSS identity fields
+//! let vendor_id = canopen.lss_inquire_vendor_id(1000).await?;
+//! let product_code = canopen.lss_inquire_product_code(1000).await?;
+//! let revision = canopen.lss_inquire_revision_number(1000).await?;
+//! let serial = canopen.lss_inquire_serial_number(1000).await?;
 //!
 //! // Configure node-ID (if needed)
 //! match canopen.lss_configure_node_id(10, 1000).await? {
@@ -1007,7 +1010,7 @@ impl CANopenSimple {
     /// Switch LSS to global state (affects all unconfigured slaves)
     ///
     /// # Arguments
-    /// * `mode` - LssMode::Waiting or LssMode::Configuration
+    /// * `mode` - LssMode::Operation or LssMode::Configuration
     ///
     /// # Example
     /// ```no_run
@@ -1143,26 +1146,101 @@ impl CANopenSimple {
         }
     }
 
-    /// Inquire LSS address from selected slave
+    /// Inquire vendor ID only from selected LSS slave
     ///
-    /// Returns the LSS address (Vendor-ID, Product-Code, Revision, Serial Number)
+    /// Queries only the vendor ID field (LSS command 0x5A).
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds
     ///
     /// # Example
     /// ```no_run
     /// # use libcanopen_client::*;
     /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
-    /// let address = canopen.lss_inquire_address(1000).await?;
-    /// println!("Vendor ID: 0x{:08X}", address.vendor_id);
-    /// println!("Product Code: 0x{:08X}", address.product_code);
-    /// println!("Revision: 0x{:08X}", address.revision_number);
-    /// println!("Serial: 0x{:08X}", address.serial_number);
+    /// let vendor_id = canopen.lss_inquire_vendor_id(1000).await?;
+    /// println!("Vendor ID: 0x{:08X}", vendor_id);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn lss_inquire_address(&self, timeout_ms: u32) -> Result<LssAddress> {
+    pub async fn lss_inquire_vendor_id(&self, timeout_ms: u32) -> Result<u32> {
         let lss_lock = self.lss_manager.read().await;
         if let Some(lss) = lss_lock.as_ref() {
-            lss.inquire_lss_address(timeout_ms).await
+            lss.inquire_vendor_id(timeout_ms).await
+        } else {
+            Err(CANopenError::NotInitialized)
+        }
+    }
+
+    /// Inquire product code only from selected LSS slave
+    ///
+    /// Queries only the product code field (LSS command 0x5B).
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use libcanopen_client::*;
+    /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
+    /// let product_code = canopen.lss_inquire_product_code(1000).await?;
+    /// println!("Product Code: 0x{:08X}", product_code);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn lss_inquire_product_code(&self, timeout_ms: u32) -> Result<u32> {
+        let lss_lock = self.lss_manager.read().await;
+        if let Some(lss) = lss_lock.as_ref() {
+            lss.inquire_product_code(timeout_ms).await
+        } else {
+            Err(CANopenError::NotInitialized)
+        }
+    }
+
+    /// Inquire revision number only from selected LSS slave
+    ///
+    /// Queries only the revision number field (LSS command 0x5C).
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use libcanopen_client::*;
+    /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
+    /// let revision = canopen.lss_inquire_revision_number(1000).await?;
+    /// println!("Revision: 0x{:08X}", revision);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn lss_inquire_revision_number(&self, timeout_ms: u32) -> Result<u32> {
+        let lss_lock = self.lss_manager.read().await;
+        if let Some(lss) = lss_lock.as_ref() {
+            lss.inquire_revision_number(timeout_ms).await
+        } else {
+            Err(CANopenError::NotInitialized)
+        }
+    }
+
+    /// Inquire serial number only from selected LSS slave
+    ///
+    /// Queries only the serial number field (LSS command 0x5D).
+    ///
+    /// # Arguments
+    /// * `timeout_ms` - Timeout in milliseconds
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use libcanopen_client::*;
+    /// # async fn example(canopen: &CANopenSimple) -> Result<()> {
+    /// let serial = canopen.lss_inquire_serial_number(1000).await?;
+    /// println!("Serial Number: 0x{:08X}", serial);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn lss_inquire_serial_number(&self, timeout_ms: u32) -> Result<u32> {
+        let lss_lock = self.lss_manager.read().await;
+        if let Some(lss) = lss_lock.as_ref() {
+            lss.inquire_serial_number(timeout_ms).await
         } else {
             Err(CANopenError::NotInitialized)
         }
