@@ -381,16 +381,17 @@ impl LssManager {
     /// Switch to selective state (specific slave by LSS address)
     pub async fn switch_state_selective(&self, address: &LssAddress) -> Result<()> {
         // Send 4 messages for the 4 parts of LSS address
-        for (index, value) in [
-            address.vendor_id,
-            address.product_code,
-            address.revision_number,
-            address.serial_number,
-        ]
-        .iter()
-        .enumerate()
-        {
-            let mut command = vec![LssCommand::SwitchStateSelective as u8, index as u8];
+        // CS values: 0x40 (vendor), 0x41 (product), 0x42 (revision), 0x43 (serial)
+        let address_parts = [
+            (0x40u8, address.vendor_id),
+            (0x41u8, address.product_code),
+            (0x42u8, address.revision_number),
+            (0x43u8, address.serial_number),
+            (0x44u8, 0),
+        ];
+
+        for (cs, value) in address_parts.iter() {
+            let mut command = vec![*cs, 0];
             command.extend_from_slice(&value.to_le_bytes());
             command.extend_from_slice(&[0, 0]); // Padding to 8 bytes
 
