@@ -56,8 +56,12 @@ async fn main() -> Result<()> {
     let revision_result = canopen.lss_inquire_revision_number(1000).await;
     let serial_result = canopen.lss_inquire_serial_number(1000).await;
 
-    if let (Ok(vendor_id), Ok(product_code), Ok(revision), Ok(serial)) = 
-        (vendor_id_result, product_code_result, revision_result, serial_result) {
+    if let (Ok(vendor_id), Ok(product_code), Ok(revision), Ok(serial)) = (
+        vendor_id_result,
+        product_code_result,
+        revision_result,
+        serial_result,
+    ) {
         println!("✓ LSS Identity received:");
         println!("  Vendor ID:       0x{:08X}", vendor_id);
         println!("  Product Code:    0x{:08X}", product_code);
