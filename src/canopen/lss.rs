@@ -387,13 +387,13 @@ impl LssManager {
             (0x41u8, address.product_code),
             (0x42u8, address.revision_number),
             (0x43u8, address.serial_number),
-            (0x44u8, 0),
+            (0x44u8, 0u32),
         ];
 
         for (cs, value) in address_parts.iter() {
-            let mut command = vec![*cs, 0];
+            let mut command = vec![*cs];
             command.extend_from_slice(&value.to_le_bytes());
-            command.extend_from_slice(&[0, 0]); // Padding to 8 bytes
+            command.extend_from_slice(&[0, 0, 0]); // Padding to 8 bytes
 
             let lss_msg = CanMessage::new(LSS_MASTER_TX, command)
                 .expect("LSS message creation should never fail");
