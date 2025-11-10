@@ -554,10 +554,7 @@ impl LssManager {
                             debug!("LSS: Vendor ID: 0x{:08X}", vendor_id);
                             vendor_ids.push(vendor_id);
                         }
-                        // Re-register to catch more responses
-                        let (new_tx, new_rx) = mpsc::channel(100);
-                        self.pending_requests.write().await.insert(cs, new_tx);
-                        response_rx = new_rx;
+                        // Continue collecting more responses
                     }
                     Ok(_) => continue,
                     Err(_) => break,
@@ -613,10 +610,7 @@ impl LssManager {
                             debug!("LSS: Product Code: 0x{:08X}", product_code);
                             product_codes.push(product_code);
                         }
-                        // Re-register to catch more responses
-                        let (new_tx, new_rx) = mpsc::channel(100);
-                        self.pending_requests.write().await.insert(cs, new_tx);
-                        response_rx = new_rx;
+                        // Continue collecting more responses
                     }
                     Ok(_) => continue,
                     Err(_) => break,
@@ -672,10 +666,7 @@ impl LssManager {
                             debug!("LSS: Revision Number: 0x{:08X}", revision_number);
                             revision_numbers.push(revision_number);
                         }
-                        // Re-register to catch more responses
-                        let (new_tx, new_rx) = mpsc::channel(100);
-                        self.pending_requests.write().await.insert(cs, new_tx);
-                        response_rx = new_rx;
+                        // Continue collecting more responses
                     }
                     Ok(_) => continue,
                     Err(_) => break,
@@ -731,10 +722,7 @@ impl LssManager {
                             debug!("LSS: Serial Number: 0x{:08X}", serial_number);
                             serial_numbers.push(serial_number);
                         }
-                        // Re-register to catch more responses
-                        let (new_tx, new_rx) = mpsc::channel(100);
-                        self.pending_requests.write().await.insert(cs, new_tx);
-                        response_rx = new_rx;
+                        // Continue collecting more responses
                     }
                     Ok(_) => continue,
                     Err(_) => break,
@@ -790,10 +778,7 @@ impl LssManager {
                             debug!("LSS: Node ID: {}", node_id);
                             node_ids.push(node_id);
                         }
-                        // Re-register to catch more responses
-                        let (new_tx, new_rx) = mpsc::channel(100);
-                        self.pending_requests.write().await.insert(cs, new_tx);
-                        response_rx = new_rx;
+                        // Continue collecting more responses
                     }
                     Ok(_) => continue,
                     Err(_) => break,
