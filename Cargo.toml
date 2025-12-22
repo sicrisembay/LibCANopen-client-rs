@@ -13,7 +13,7 @@ categories = ["embedded", "hardware-support"]
 name = "libcanopen_client"
 
 [dependencies]
-peak-can-sys = "0.1.2"          # PEAK CAN hardware interface
+peak-can-sys = "0.2.0"          # PEAK CAN hardware interface
 tokio = { version = "1.0", features = ["full"] }  # Async runtime
 serde = { version = "1.0", features = ["derive"] } # Serialization
 log = "0.4"                      # Logging
