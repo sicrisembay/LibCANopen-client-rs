@@ -14,7 +14,7 @@ name = "libcanopen_client"
 
 [dependencies]
 peak-can-sys = "0.2.0"          # PEAK CAN hardware interface
-tokio = { version = "1.49", features = ["full"] }  # Async runtime
+tokio = { version = "1.50", features = ["full"] }  # Async runtime
 serde = { version = "1.0", features = ["derive"] } # Serialization
 log = "0.4"                      # Logging
 thiserror = "1.0"                # Error handling
