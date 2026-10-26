@@ -17,7 +17,7 @@ peak-can-sys = "0.2.0"          # PEAK CAN hardware interface
 tokio = { version = "1.52", features = ["full"] }  # Async runtime
 serde = { version = "1.0", features = ["derive"] } # Serialization
 log = "0.4"                      # Logging
-thiserror = "1.0"                # Error handling
+thiserror = "2.0"                # Error handling
 crossbeam = "0.8"                # Concurrent data structures
 futures = "0.3"                  # Async utilities
 bitflags = "2.11"                 # Bit flag operations
